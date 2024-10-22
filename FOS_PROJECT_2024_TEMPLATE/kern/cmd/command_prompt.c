@@ -480,17 +480,19 @@ int is_subseq(char* sub, char* orig) {
 
 
 
+
 /**
    Receives an array of arguments and the array's size.
    arguments[0] is guaranteed to be the intended command by the user
 
    Returns:
- 	 - if the exact command was found
- 	 	 & exact number of arguments: its index
- 	 	 Otherwise: CMD_INV_NUM_ARGS
-	 - if the command chars was a subsequence of an existing one
-	 	 Add to foundCommands LIST, at the end: CMD_MATCHED
-	 - else: CMD_INVALID
+ 	  - if the exact command was found
+ 	 	  & - exact number of arguments: its index
+		    - at least one argument to a vararg command: its index
+ 	 	  Otherwise: CMD_INV_NUM_ARGS
+	  - if the command chars was a subsequence of an existing one
+	 	  Add to foundCommands LIST, at the end: CMD_MATCHED
+	  - else: CMD_INVALID
  */
 
 int process_command(int number_of_arguments, char** arguments)
@@ -508,9 +510,12 @@ int process_command(int number_of_arguments, char** arguments)
 			// emptying the list as it might have been populated with sub-matching commands
 			LIST_INIT(&foundCommands);
 
-			if (commands[i].num_of_args == (number_of_arguments - 1)) {
+			if ((commands[i].num_of_args == (number_of_arguments - 1))
+			 || (commands[i].num_of_args == -1 && number_of_arguments >= 2)
+			) {
 				return i;
-			} else {
+			}
+			else {
 				LIST_INSERT_HEAD(&foundCommands, &commands[i]);
 				return CMD_INV_NUM_ARGS;
 			}

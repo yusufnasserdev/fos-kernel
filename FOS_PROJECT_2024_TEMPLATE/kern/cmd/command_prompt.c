@@ -453,16 +453,79 @@ int execute_command(char *command_string)
 }
 
 
+/**
+ * checks if sub's chars exists in the original in the same order, i.e. s1 is a subsequence of s2.
+ * returns 1 if the above condition is met; otherwise 0.
+ */
+
+int is_subseq(char* sub, char* orig) {
+	uint16 sub_len = strlen(sub);
+	uint16 orig_len = strlen(orig);
+	uint16 found_chars = 0;
+
+	/**
+	 * Iterates over the original array and increments the found array on a char match
+	 *
+	 * What makes this work that a subsequence have to be in the same order of the original.
+	 */
+
+	for (int i = 0; i < orig_len && found_chars < sub_len; i++) {
+		if (sub[found_chars] == orig[i]) {
+			found_chars++;
+		}
+	}
+
+	return sub_len == found_chars;
+}
+
+
+
+/**
+   Receives an array of arguments and the array's size.
+   arguments[0] is guaranteed to be the intended command by the user
+
+   Returns:
+ 	 - if the exact command was found
+ 	 	 & exact number of arguments: its index
+ 	 	 Otherwise: CMD_INV_NUM_ARGS
+	 - if the command chars was a subsequence of an existing one
+	 	 Add to foundCommands LIST, at the end: CMD_MATCHED
+	 - else: CMD_INVALID
+ */
+
 int process_command(int number_of_arguments, char** arguments)
 {
 	//TODO: [PROJECT'24.MS1 - #01] [1] PLAY WITH CODE! - process_command
 
+	LIST_INIT(&foundCommands);
+
 	for (int i = 0; i < NUM_OF_COMMANDS; i++)
 	{
+		// Command name is a match, checking inside for number of arguments
 		if (strcmp(arguments[0], commands[i].name) == 0)
 		{
-			return i;
+
+			// emptying the list as it might have been populated with sub-matching commands
+			LIST_INIT(&foundCommands);
+
+			if (commands[i].num_of_args == (number_of_arguments - 1)) {
+				return i;
+			} else {
+				LIST_INSERT_HEAD(&foundCommands, &commands[i]);
+				return CMD_INV_NUM_ARGS;
+			}
 		}
+
+		// Checking if the command is subsequence
+		if (is_subseq(arguments[0], commands[i].name)) {
+			LIST_INSERT_TAIL(&foundCommands, &commands[i]);
+		}
+
 	}
+
+	// Check if any similar commands were found
+	if (LIST_SIZE(&foundCommands) > 0) return CMD_MATCHED;
+
+	// NOTHING WAS FOUND, NOT EVEN CLOSE
 	return CMD_INVALID;
 }

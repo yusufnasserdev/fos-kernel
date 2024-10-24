@@ -299,9 +299,27 @@ int sys_pf_calculate_allocated_pages(void)
 /*******************************/
 /* USER HEAP SYSTEM CALLS */
 /*******************************/
+
+uint8 is_valid_address(uint32 virtual_address) {
+	if ( (void *) virtual_address != NULL
+			&& virtual_address >= USER_HEAP_START
+			&& virtual_address <= USER_HEAP_MAX
+	) {
+		return 1;
+	}
+	return 0;
+}
+
+
+
 void sys_free_user_mem(uint32 virtual_address, uint32 size)
 {
-	//TODO: [PROJECT'24.MS1 - #03] [2] SYSTEM CALLS - Params Validation
+	//TODO: [PROJECT'24.MS1 - #03] [2] SYSTEM CALLS - Params Validation [DONE]
+
+	if (!is_valid_address(virtual_address)) {
+		env_exit();
+		return;
+	}
 
 	if(isBufferingEnabled())
 	{
@@ -316,11 +334,17 @@ void sys_free_user_mem(uint32 virtual_address, uint32 size)
 
 void sys_allocate_user_mem(uint32 virtual_address, uint32 size)
 {
-	//TODO: [PROJECT'24.MS1 - #03] [2] SYSTEM CALLS - Params Validation
+	//TODO: [PROJECT'24.MS1 - #03] [2] SYSTEM CALLS - Params Validation [DONE]
+
+	if (!is_valid_address(virtual_address)) {
+		env_exit();
+		return;
+	}
 
 	allocate_user_mem(cur_env, virtual_address, size);
 	return;
 }
+
 
 void sys_allocate_chunk(uint32 virtual_address, uint32 size, uint32 perms)
 {

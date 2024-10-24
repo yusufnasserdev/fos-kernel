@@ -295,23 +295,21 @@ void sys_utilities(char* utilityName, int value)
 }
 
 
-//TODO: [PROJECT'24.MS1 - #02] [2] SYSTEM CALLS - Implement these system calls
+//TODO: [PROJECT'24.MS1 - #02] [2] SYSTEM CALLS - Implement these system calls [DONE]
 void* sys_sbrk(int increment)
 {
-	//Comment the following line before start coding...
-	panic("not implemented yet");
-	return NULL;
+	return (void*) syscall(SYS_sbrk, (uint32)increment, 0, 0, 0, 0);
 }
 
 void sys_free_user_mem(uint32 virtual_address, uint32 size)
 {
-	//Comment the following line before start coding...
-	panic("not implemented yet");
+	syscall(SYS_free_user_mem, (uint32)virtual_address, (uint32)size, 0, 0, 0);
+	return;
 }
 
 void sys_allocate_user_mem(uint32 virtual_address, uint32 size)
 {
-	//Comment the following line before start coding...
-	panic("not implemented yet");
+	syscall(SYS_allocate_user_mem, (uint32)virtual_address, (uint32)size, 0, 0, 0);
+	return;
 }
 

@@ -101,11 +101,32 @@ void initialize_dynamic_allocator(uint32 daStart, uint32 initSizeOfAllocatedSpac
 	//==================================================================================
 	//==================================================================================
 
-	//TODO: [PROJECT'24.MS1 - #04] [3] DYNAMIC ALLOCATOR - initialize_dynamic_allocator
-	//COMMENT THE FOLLOWING LINE BEFORE START CODING
-	panic("initialize_dynamic_allocator is not implemented yet");
-	//Your Code is Here...
+	//TODO: [PROJECT'24.MS1 - #04] [3] DYNAMIC ALLOCATOR - initialize_dynamic_allocator [DONE]
 
+	// Beginning and Ending special blocks (simple integers both holding 1)
+	uint32* the_a_block = (uint32*)daStart;
+	uint32* the_z_block = (uint32*)(daStart + initSizeOfAllocatedSpace) - 1;
+
+	*the_a_block = 1;
+	*the_z_block = 1;
+
+	// Calculating the size of the first block - beg & end integers.
+	uint32 alpha_block_size = initSizeOfAllocatedSpace - (2*sizeof(int));
+
+	// Header and Footer for the first block, placed after the A block and before the Z block respectively.
+	uint32* alpha_block_header = the_a_block + 1;
+	uint32* alpha_block_footer = the_z_block - 1;
+
+	// Contains the size, LSB is 0 as guaranteed even and it's empty.
+	*alpha_block_header = alpha_block_size;
+	*alpha_block_footer = alpha_block_size;
+
+	// First and only free block, As this is the initializing point, so the whole heap is just one free block)
+	struct BlockElement* alpha_block = (struct BlockElement*)(alpha_block_header + 1);
+
+	// Initializing the freeBlocksList and adding the first free block to the list.
+	LIST_INIT(&freeBlocksList);
+	LIST_INSERT_HEAD(&freeBlocksList, alpha_block);
 }
 //==================================
 // [2] SET BLOCK HEADER & FOOTER:

@@ -80,6 +80,24 @@ void print_blocks_list(struct MemBlock_LIST list)
 ////********************************************************************************//
 
 //==================================================================================//
+//++============================== ADDED HELPERS ===================================//
+//==================================================================================//
+
+__inline__ uint32* get_block_header_address(void* va)
+{
+	return (uint32 *)va - 1;
+}
+
+__inline__ uint32* get_block_footer_address(void* va, uint32 totalSize)
+{
+	// Reducing totalSize (bytes) to integer units for pointer arithmetic to work.
+	return ((uint32*)va + (totalSize/sizeof(int))) - 2;
+}
+
+////********************************************************************************//
+////********************************************************************************//
+
+//==================================================================================//
 //============================ REQUIRED FUNCTIONS ==================================//
 //==================================================================================//
 
@@ -117,7 +135,7 @@ void initialize_dynamic_allocator(uint32 daStart, uint32 initSizeOfAllocatedSpac
 	uint32* alpha_block_header = the_a_block + 1;
 	uint32* alpha_block_footer = the_z_block - 1;
 
-	// Contains the size, LSB is 0 as guaranteed even and it's empty.
+	// Contains the size, LSB is 0 (free) as guaranteed even and it's empty.
 	*alpha_block_header = alpha_block_size;
 	*alpha_block_footer = alpha_block_size;
 
@@ -134,9 +152,18 @@ void initialize_dynamic_allocator(uint32 daStart, uint32 initSizeOfAllocatedSpac
 void set_block_data(void* va, uint32 totalSize, bool isAllocated)
 {
 	//TODO: [PROJECT'24.MS1 - #05] [3] DYNAMIC ALLOCATOR - set_block_data
-	//COMMENT THE FOLLOWING LINE BEFORE START CODING
-	panic("set_block_data is not implemented yet");
-	//Your Code is Here...
+
+	uint32* x_block_header = get_block_header_address(va);
+	uint32* x_block_footer = get_block_footer_address(va, totalSize);
+
+	cprintf("header: %x", x_block_header);
+	cprintf("data: %x", va);
+	cprintf("footer: %x", x_block_footer);
+
+	if(isAllocated) totalSize++; // Assigning the LSB
+
+	*x_block_header = totalSize;
+	*x_block_footer = totalSize;
 }
 
 

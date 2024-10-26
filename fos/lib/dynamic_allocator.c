@@ -85,7 +85,10 @@ void print_blocks_list(struct MemBlock_LIST list)
 
 // Defining a MACRO for the split threshold.
 #define MIN_SPLIT_THRESHOLD(requested_size) \
-    ((requested_size) + DYN_ALLOC_MIN_FREE_BLOCK_SIZE)
+		((requested_size) + DYN_ALLOC_MIN_FREE_BLOCK_SIZE)
+
+// Checks footer or header LSB, if 1; it denotes an allocated block
+#define IS_ALLOCATED(x) (x & 1)
 
 
 __inline__ uint32* get_block_header_address(void* va)
@@ -96,29 +99,29 @@ __inline__ uint32* get_block_header_address(void* va)
 __inline__ uint32* get_block_footer_address(void* va, uint32 totalSize)
 {
 	// Reducing totalSize (bytes) to integer units for pointer arithmetic to work.
-	return ((uint32*)va + (totalSize/sizeof(int))) - 2;
+	return (uint32*)(va + totalSize - 8);
 }
 
 
 // Allocates a free block and removes it from the list.
 void allocate_free_block(struct BlockElement* block,
-                                         uint32 size) {
-    set_block_data(block, size, 1);
-    LIST_REMOVE(&freeBlocksList, block);
+		uint32 size) {
+	set_block_data(block, size, 1);
+	LIST_REMOVE(&freeBlocksList, block);
 }
 
 
 // Splitting a block and create a new free block
 void split_block(struct BlockElement* block, uint32 requested_size, uint32 total_block_size) {
-    // Creating the new free block in the remaining free region.
-    struct BlockElement* new_free_block =
-        (struct BlockElement*)((uint32*)block + (requested_size/sizeof(int)));
+	// Creating the new free block in the remaining free region.
+	struct BlockElement* new_free_block =
+			(struct BlockElement*)((uint32*)block + (requested_size/sizeof(int)));
 
-    // Setup the new free block
-    set_block_data(new_free_block, total_block_size - requested_size, 0);
-    LIST_INSERT_AFTER(&freeBlocksList, block, new_free_block);
+	// Setup the new free block
+	set_block_data(new_free_block, total_block_size - requested_size, 0);
+	LIST_INSERT_AFTER(&freeBlocksList, block, new_free_block);
 
-    allocate_free_block(block, requested_size);
+	allocate_free_block(block, requested_size);
 }
 
 
@@ -184,9 +187,9 @@ void set_block_data(void* va, uint32 totalSize, bool isAllocated)
 	uint32* x_block_header = get_block_header_address(va);
 	uint32* x_block_footer = get_block_footer_address(va, totalSize);
 
-//	cprintf("header: %x\n", x_block_header);
-//	cprintf("data: %x\n", va);
-//	cprintf("footer: %x\n", x_block_footer);
+	//	cprintf("header: %x\n", x_block_header);
+	//	cprintf("data: %x\n", va);
+	//	cprintf("footer: %x\n", x_block_footer);
 
 	if(isAllocated) totalSize++; // Assigning the LSB
 
@@ -229,7 +232,6 @@ void *alloc_block_FF(uint32 size)
 	LIST_FOREACH(iterator_block, &freeBlocksList) {
 		uint32 blk_size = get_block_size(iterator_block);
 		if (blk_size >= size) {
-
 			// Check if it can be split to eliminate internal fragmentation.
 			if (blk_size >= MIN_SPLIT_THRESHOLD(size)) {
 				split_block(iterator_block, size, blk_size);
@@ -285,10 +287,61 @@ void *alloc_block_BF(uint32 size)
 //===================================================
 void free_block(void *va)
 {
-	//TODO: [PROJECT'24.MS1 - #07] [3] DYNAMIC ALLOCATOR - free_block
-	//COMMENT THE FOLLOWING LINE BEFORE START CODING
-	panic("free_block is not implemented yet");
-	//Your Code is Here...
+	//TODO: [PROJECT'24.MS1 - #07] [3] DYNAMIC ALLOCATOR - free_block [DONE]
+
+	// Checking for NULL
+	if (va == NULL) return;
+
+	// Finding the closest free block to insert the newly freely block.
+	struct BlockElement* freed_block = (struct BlockElement*)va;
+	set_block_data(freed_block, get_block_size(freed_block), 0);
+
+	// Placement variable, counts the supposed index of the block.
+	uint32 idx = 0;
+	struct BlockElement* iterator_block;
+
+	LIST_FOREACH(iterator_block, &freeBlocksList) {
+		if (freed_block < iterator_block) {
+			LIST_INSERT_BEFORE(&freeBlocksList, iterator_block, freed_block);
+			break;
+		}
+		idx++;
+	}
+
+	// If this condition is true, means that so fare the freed block hasn't been inserted
+	// Add it to the tail of the list, it's either an empty list or the address is after all list elements.
+	if (idx == freeBlocksList.size) { LIST_INSERT_TAIL(&freeBlocksList, freed_block); }
+
+
+	// Merging if possible.
+	// Check header for next block
+	uint32* next_block_header = get_block_footer_address(freed_block, get_block_size(freed_block)) + 1;
+	uint32* prev_block_footer = get_block_header_address(freed_block) - 1;
+
+	// Merge with next block
+	if (!IS_ALLOCATED(*next_block_header)) {
+		// remove next block from list
+		LIST_REMOVE(&freeBlocksList, (struct BlockElement*)(next_block_header + 1));
+
+		// re-set the freed block data to new size
+		uint32 block_new_size = get_block_size(freed_block) + (*next_block_header);
+		set_block_data(freed_block, block_new_size, 0);
+	}
+
+	if (!IS_ALLOCATED(*prev_block_footer)) {
+		// remove freed block from list
+		LIST_REMOVE(&freeBlocksList, freed_block);
+
+		// re-set the prev_block data to new size
+		uint32 block_new_size = get_block_size(freed_block) + (*prev_block_footer);
+
+		struct BlockElement* merged_block = (struct BlockElement*)
+				((uint32)prev_block_footer - (*prev_block_footer) + 8);
+
+		// Adjusting the new address
+		set_block_data(merged_block, block_new_size, 0);
+	}
+
 }
 
 //=========================================

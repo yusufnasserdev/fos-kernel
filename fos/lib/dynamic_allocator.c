@@ -83,6 +83,11 @@ void print_blocks_list(struct MemBlock_LIST list)
 //++============================== ADDED HELPERS ===================================//
 //==================================================================================//
 
+// Defining a MACRO for the split threshold.
+#define MIN_SPLIT_THRESHOLD(requested_size) \
+    ((requested_size) + DYN_ALLOC_MIN_FREE_BLOCK_SIZE)
+
+
 __inline__ uint32* get_block_header_address(void* va)
 {
 	return (uint32 *)va - 1;
@@ -93,6 +98,29 @@ __inline__ uint32* get_block_footer_address(void* va, uint32 totalSize)
 	// Reducing totalSize (bytes) to integer units for pointer arithmetic to work.
 	return ((uint32*)va + (totalSize/sizeof(int))) - 2;
 }
+
+
+// Allocates a free block and removes it from the list.
+void allocate_free_block(struct BlockElement* block,
+                                         uint32 size) {
+    set_block_data(block, size, 1);
+    LIST_REMOVE(&freeBlocksList, block);
+}
+
+
+// Splitting a block and create a new free block
+void split_block(struct BlockElement* block, uint32 requested_size, uint32 total_block_size) {
+    // Creating the new free block in the remaining free region.
+    struct BlockElement* new_free_block =
+        (struct BlockElement*)((uint32*)block + (requested_size/sizeof(int)));
+
+    // Setup the new free block
+    set_block_data(new_free_block, total_block_size - requested_size, 0);
+    LIST_INSERT_AFTER(&freeBlocksList, block, new_free_block);
+
+    allocate_free_block(block, requested_size);
+}
+
 
 ////********************************************************************************//
 ////********************************************************************************//
@@ -151,14 +179,14 @@ void initialize_dynamic_allocator(uint32 daStart, uint32 initSizeOfAllocatedSpac
 //==================================
 void set_block_data(void* va, uint32 totalSize, bool isAllocated)
 {
-	//TODO: [PROJECT'24.MS1 - #05] [3] DYNAMIC ALLOCATOR - set_block_data
+	//TODO: [PROJECT'24.MS1 - #05] [3] DYNAMIC ALLOCATOR - set_block_data [DONE]
 
 	uint32* x_block_header = get_block_header_address(va);
 	uint32* x_block_footer = get_block_footer_address(va, totalSize);
 
-	cprintf("header: %x", x_block_header);
-	cprintf("data: %x", va);
-	cprintf("footer: %x", x_block_footer);
+//	cprintf("header: %x\n", x_block_header);
+//	cprintf("data: %x\n", va);
+//	cprintf("footer: %x\n", x_block_footer);
 
 	if(isAllocated) totalSize++; // Assigning the LSB
 
@@ -190,11 +218,55 @@ void *alloc_block_FF(uint32 size)
 	//==================================================================================
 	//==================================================================================
 
-	//TODO: [PROJECT'24.MS1 - #06] [3] DYNAMIC ALLOCATOR - alloc_block_FF
-	//COMMENT THE FOLLOWING LINE BEFORE START CODING
-	panic("alloc_block_FF is not implemented yet");
-	//Your Code is Here...
+	//TODO: [PROJECT'24.MS1 - #06] [3] DYNAMIC ALLOCATOR - alloc_block_FF [DONE]
+	if (size == 0) return NULL;
 
+	// Adding the header and footer combined size to the user requested size.
+	size += 2 * sizeof(int);
+
+	struct BlockElement* iterator_block;
+
+	LIST_FOREACH(iterator_block, &freeBlocksList) {
+		uint32 blk_size = get_block_size(iterator_block);
+		if (blk_size >= size) {
+
+			// Check if it can be split to eliminate internal fragmentation.
+			if (blk_size >= MIN_SPLIT_THRESHOLD(size)) {
+				split_block(iterator_block, size, blk_size);
+			}
+			else {
+				allocate_free_block(iterator_block, blk_size);
+			}
+
+			return iterator_block;
+		}
+	}
+
+	uint32 sbrk_ret = (uint32)sbrk(ROUNDUP(size, PAGE_SIZE)/PAGE_SIZE);
+
+	if (sbrk_ret != -1) {
+		uint32 available_size = ROUNDUP(size, PAGE_SIZE);
+
+		// The new block to be placed @ the start of the newly added space to the heap.
+		// The old special ending block will become the header for this block.
+		struct BlockElement* new_block_after_sbrk = (struct BlockElement*)sbrk_ret;
+
+		// Check if it can be split to eliminate internal fragmentation.
+		if (available_size >= MIN_SPLIT_THRESHOLD(size)) {
+			split_block(new_block_after_sbrk, size, available_size);
+		}
+		else {
+			allocate_free_block(new_block_after_sbrk, available_size);
+		}
+
+		uint32* new_end_block = (uint32*)(sbrk_ret + available_size - sizeof(int)) ;
+		*new_end_block = 1;
+
+
+		return new_block_after_sbrk;
+	}
+
+	return NULL;
 }
 //=========================================
 // [4] ALLOCATE BLOCK BY BEST FIT:

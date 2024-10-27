@@ -9,6 +9,13 @@
 #define DYN_ALLOC_MAX_SIZE (32<<20) 		//32 MB
 #define DYN_ALLOC_MAX_BLOCK_SIZE (1<<11) 	//2 KB
 #define DYN_ALLOC_MIN_BLOCK_SIZE (1<<3) 	//8 BYTE
+#define DYN_ALLOC_HEADER_FOOTER_SIZE 2*sizeof(int) 	//8 BYTE
+#define DYN_ALLOC_MIN_FREE_BLOCK_SIZE (1<<4) 	//16 BYTE
+
+/*Flags*/
+#define DYN_ALLOC_FREE 0
+#define DYN_ALLOC_ALLOCATED 1
+
 
 /*Implementation Type of List*/
 #define IMPLICIT_LIST 1

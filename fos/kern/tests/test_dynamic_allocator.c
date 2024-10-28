@@ -1543,66 +1543,65 @@ void test_realloc_block_FF()
 	cprintf("  6.1: Basic relocation\n\n");
 	is_correct = 1;
 	{
-	    // Choose a block that has allocated blocks before and after it
-	    blockIndex = 1*allocCntPerSize + 1;
-	    int prevBlockIndex = blockIndex - 1;
-	    int nextBlockIndex = blockIndex + 1;
+		// Choose a block that has allocated blocks before and after it
+		blockIndex = 1*allocCntPerSize + 1;
+		int prevBlockIndex = blockIndex - 1;
+		int nextBlockIndex = blockIndex + 1;
 
-	    // Verify surrounding blocks are allocated (not free)
-	    // If surrounding blocks aren't allocated, allocate them
-	    if (is_free_block(startVAs[prevBlockIndex])) {
-	    	LIST_REMOVE(&freeBlocksList, (struct BlockElement*) startVAs[prevBlockIndex]);
-	    	set_block_data(startVAs[prevBlockIndex], get_block_size(startVAs[prevBlockIndex]), DYN_ALLOC_ALLOCATED);
-	    }
-	    if (is_free_block(startVAs[nextBlockIndex])) {
-	    	LIST_REMOVE(&freeBlocksList, (struct BlockElement*) startVAs[nextBlockIndex]);
-	    	set_block_data(startVAs[nextBlockIndex], get_block_size(startVAs[nextBlockIndex]), DYN_ALLOC_ALLOCATED);
-	    }
+		// Verify surrounding blocks are allocated (not free)
+		// If surrounding blocks aren't allocated, allocate them
+		if (is_free_block(startVAs[prevBlockIndex])) {
+			LIST_REMOVE(&freeBlocksList, (struct BlockElement*) startVAs[prevBlockIndex]);
+			set_block_data(startVAs[prevBlockIndex], get_block_size(startVAs[prevBlockIndex]), DYN_ALLOC_ALLOCATED);
+		}
+		if (is_free_block(startVAs[nextBlockIndex])) {
+			LIST_REMOVE(&freeBlocksList, (struct BlockElement*) startVAs[nextBlockIndex]);
+			set_block_data(startVAs[nextBlockIndex], get_block_size(startVAs[nextBlockIndex]), DYN_ALLOC_ALLOCATED);
+		}
 
-	    int old_size = allocSizes[1] - sizeOfMetaData;
-	    int new_size = old_size * 2; // Double the size
-	    void* original_address = startVAs[blockIndex];
+		int old_size = allocSizes[1] - sizeOfMetaData;
+		int new_size = old_size * 2; // Double the size
+		void* original_address = startVAs[blockIndex];
 
-	    // Store original data and block state
-	    int original_start = *(startVAs[blockIndex]);
-	    int original_mid = *(midVAs[blockIndex]);
-	    uint8 is_original_free = is_free_block(original_address);
-	    uint32 original_block_size = get_block_size(original_address);
+		// Store original data and block state
+		int original_start = *(startVAs[blockIndex]);
+		int original_mid = *(midVAs[blockIndex]);
+		uint32 original_block_size = get_block_size(original_address);
 
-	    // Reallocate
-	    void* new_va = realloc_block_FF(startVAs[blockIndex], new_size);
+		// Reallocate
+		void* new_va = realloc_block_FF(startVAs[blockIndex], new_size);
 
-	    // Verify relocation occurred
-	    if (new_va == original_address) {
-	        is_correct = 0;
-	        cprintf("test_realloc_block_FF #6.1.1: Failed - Should have relocated due to surrounding allocated blocks\n");
-	    }
+		// Verify relocation occurred
+		if (new_va == original_address) {
+			is_correct = 0;
+			cprintf("test_realloc_block_FF #6.1.1: Failed - Should have relocated due to surrounding allocated blocks\n");
+		}
 
-	    // Verify original block was freed
-	    if (!is_free_block(original_address)) {
-	        is_correct = 0;
-	        cprintf("test_realloc_block_FF #6.1.2: Failed - Original block should be freed after relocation\n");
-	    }
+		// Verify original block was freed
+		if (!is_free_block(original_address)) {
+			is_correct = 0;
+			cprintf("test_realloc_block_FF #6.1.2: Failed - Original block should be freed after relocation\n");
+		}
 
-	    if (get_block_size(original_address) != original_block_size) {
-	        is_correct = 0;
-	        cprintf("test_realloc_block_FF #6.1.3: Failed - Original block size was modified\n");
-	    }
+		if (get_block_size(original_address) != original_block_size) {
+			is_correct = 0;
+			cprintf("test_realloc_block_FF #6.1.3: Failed - Original block size was modified\n");
+		}
 
-	    // Verify data was copied correctly
-	    if (*(int*)new_va != original_start ||
-	        *(int*)(new_va + old_size/2) != original_mid) { // Here old size, as relocate doesn't stretch, the added region
-	        is_correct = 0;
-	        cprintf("test_realloc_block_FF #6.1.4: Failed - Data not copied correctly\n");
-	    }
+		// Verify data was copied correctly
+		if (*(int*)new_va != original_start ||
+				*(int*)(new_va + old_size/2) != original_mid) { // Here old size, as relocate doesn't stretch, the added region
+			is_correct = 0;
+			cprintf("test_realloc_block_FF #6.1.4: Failed - Data not copied correctly\n");
+		}
 
-	    // Verify new block properties
-	    uint32 expected_new_size = ROUNDUP(new_size + sizeOfMetaData, 2);
+		// Verify new block properties
+		uint32 expected_new_size = ROUNDUP(new_size + sizeOfMetaData, 2);
 
-	    if (get_block_size(new_va) != expected_new_size || is_free_block(new_va) != is_original_free) {
-	        is_correct = 0;
-	        cprintf("test_realloc_block_FF #6.1.5: Failed - New block has incorrect size or allocation status\n");
-	    }
+		if (get_block_size(new_va) != expected_new_size || is_free_block(new_va)) {
+			is_correct = 0;
+			cprintf("test_realloc_block_FF #6.1.5: Failed - New block has incorrect size or allocation status\n");
+		}
 	}
 	if (is_correct) eval += 15;
 
@@ -1645,8 +1644,92 @@ void test_realloc_block_FF()
 	if (is_correct) eval += 10;
 
 	//====================================================================//
-	cprintf("END of test realloc_block_FF evaluation = %d% out of 140% (Additional 40% for written tests) \n", eval);
+	//[8] Test realloc with odd sizes
+	//====================================================================//
+	cprintf("8: Test realloc with odd sizes [10%]\n\n");
+	is_correct = 1;
+	{
 
+		// Choose a block that has allocated blocks before and after it
+		blockIndex = 1*allocCntPerSize + 1;
+		int prevBlockIndex = blockIndex - 1;
+		int nextBlockIndex = blockIndex + 1;
+
+		// Verify a blocks are allocated (not free)
+		// If surrounding blocks aren't allocated, allocate them
+		if (is_free_block(startVAs[blockIndex])) {
+			LIST_REMOVE(&freeBlocksList, (struct BlockElement*) startVAs[blockIndex]);
+			set_block_data(startVAs[blockIndex], get_block_size(startVAs[blockIndex]), DYN_ALLOC_ALLOCATED);
+		}
+		if (is_free_block(startVAs[prevBlockIndex])) {
+			LIST_REMOVE(&freeBlocksList, (struct BlockElement*) startVAs[prevBlockIndex]);
+			set_block_data(startVAs[prevBlockIndex], get_block_size(startVAs[prevBlockIndex]), DYN_ALLOC_ALLOCATED);
+		}
+		if (is_free_block(startVAs[nextBlockIndex])) {
+			LIST_REMOVE(&freeBlocksList, (struct BlockElement*) startVAs[nextBlockIndex]);
+			set_block_data(startVAs[nextBlockIndex], get_block_size(startVAs[nextBlockIndex]), DYN_ALLOC_ALLOCATED);
+		}
+
+		int old_size = allocSizes[1] - sizeOfMetaData;
+		int new_size = old_size + 67; // Odd size
+		void* original_address = startVAs[blockIndex];
+
+		cprintf("\nNew_size: %d\n", new_size);
+
+
+		// Store original data and block state
+		int original_start = *(startVAs[blockIndex]);
+		int original_mid = *(midVAs[blockIndex]);
+		uint32 original_block_size = get_block_size(original_address);
+
+		// Reallocate
+		void* new_va = realloc_block_FF(startVAs[blockIndex], new_size);
+
+		// Verify relocation occurred
+		if (new_va == original_address) {
+			is_correct = 0;
+			cprintf("test_realloc_block_FF #8.1.: Failed - Should have relocated due to surrounding allocated blocks\n");
+		}
+
+		// Verify original block was freed
+		if (!is_free_block(original_address)) {
+			is_correct = 0;
+			cprintf("test_realloc_block_FF #8.2: Failed - Original block should be freed after relocation\n");
+		}
+
+		if (get_block_size(original_address) != original_block_size) {
+			is_correct = 0;
+			cprintf("test_realloc_block_FF #8.3: Failed - Original block size was modified\n");
+		}
+
+		// Verify data was copied correctly
+		if (*(int*)new_va != original_start ||
+				*(int*)(new_va + old_size/2) != original_mid) { // Here old size, as relocate doesn't stretch, the added region
+
+			cprintf("\nOld Size1: %d\n", original_start);
+			cprintf("\nNew Size1: %d\n", *(int*)new_va);
+
+			cprintf("\nOld Size2: %d\n", original_mid);
+			cprintf("\nNew Size2: %d\n", *(int*)(new_va + old_size/2));
+
+			is_correct = 0;
+			cprintf("test_realloc_block_FF #8.4: Failed - Data not copied correctly\n");
+		}
+
+		// Verify new block properties
+		uint32 expected_new_size = ROUNDUP(new_size + sizeOfMetaData, 2);
+		cprintf("\nAllocated Size: %d\n", get_block_size(new_va));
+
+		if (get_block_size(new_va) != expected_new_size || is_free_block(new_va)) {
+			is_correct = 0;
+			cprintf("test_realloc_block_FF #8.5: Failed - New block has incorrect size or allocation status\n");
+		}
+
+	}
+	if (is_correct) eval += 10;
+
+	//====================================================================//
+	cprintf("FINAL test realloc_block_FF evaluation = %d% out of 150% (Additional 50% for written tests)\n", eval);
 }
 
 

@@ -280,11 +280,80 @@ void *alloc_block_FF(uint32 size)
 //=========================================
 void *alloc_block_BF(uint32 size)
 {
-	//TODO: [PROJECT'24.MS1 - BONUS] [3] DYNAMIC ALLOCATOR - alloc_block_BF
-	//COMMENT THE FOLLOWING LINE BEFORE START CODING
-	panic("alloc_block_BF is not implemented yet");
-	//Your Code is Here...
+	//TODO: [PROJECT'24.MS1 - BONUS] [3] DYNAMIC ALLOCATOR - alloc_block_BF [DONE]
+	//==================================================================================
+	//DON'T CHANGE THESE LINES==========================================================
+	//==================================================================================
+	{
+		if (size % 2 != 0) size++;	//ensure that the size is even (to use LSB as allocation flag)
+		if (size < DYN_ALLOC_MIN_BLOCK_SIZE)
+			size = DYN_ALLOC_MIN_BLOCK_SIZE ;
+		if (!is_initialized)
+		{
+			uint32 required_size = size + 2*sizeof(int) /*header & footer*/ + 2*sizeof(int) /*da begin & end*/ ;
+			uint32 da_start = (uint32)sbrk(ROUNDUP(required_size, PAGE_SIZE)/PAGE_SIZE);
+			uint32 da_break = (uint32)sbrk(0);
+			initialize_dynamic_allocator(da_start, da_break - da_start);
+		}
+	}
+	//==================================================================================
+	//==================================================================================
 
+	if (size == 0) return NULL;
+
+	// Adding the header and footer combined size to the user requested size.
+	size += DYN_ALLOC_HEADER_FOOTER_SIZE;
+
+	struct BlockElement* iterator_block;
+	struct BlockElement* best_fit_block = NULL;
+	uint32 min_size_difference = 0xFFFFFFFF;  // Initialize to maximum possible value
+
+	// First pass: Find the block with the smallest suitable size
+	LIST_FOREACH(iterator_block, &freeBlocksList) {
+		uint32 blk_size = get_block_size(iterator_block);
+		if (blk_size >= size) {
+			uint32 current_difference = blk_size - size;
+			if (current_difference < min_size_difference) {
+				min_size_difference = current_difference;
+				best_fit_block = iterator_block;
+			}
+		}
+	}
+
+	// If we found a suitable block
+	if (best_fit_block != NULL) {
+		uint32 best_blk_size = get_block_size(best_fit_block);
+		// Check if it can be split to eliminate internal fragmentation
+		if (is_splittable(best_blk_size, size)) {
+			split_free_block_and_allocate(best_fit_block, size, best_blk_size);
+		}
+		else {
+			allocate_free_block(best_fit_block, best_blk_size);
+		}
+		return best_fit_block;
+	}
+
+	// If no suitable block found, request more memory
+	uint32 sbrk_ret = (uint32)sbrk(ROUNDUP(size, PAGE_SIZE)/PAGE_SIZE);
+	if (sbrk_ret != -1) {
+		uint32 available_size = ROUNDUP(size, PAGE_SIZE);
+		// The new block to be placed @ the start of the newly added space to the heap
+		// The old special ending block will become the header for this block
+		struct BlockElement* new_block_after_sbrk = (struct BlockElement*)sbrk_ret;
+		// Check if it can be split to eliminate internal fragmentation
+		if (is_splittable(available_size, size)) {
+			split_free_block_and_allocate(new_block_after_sbrk, size, available_size);
+		}
+		else {
+			allocate_free_block(new_block_after_sbrk, available_size);
+		}
+
+		uint32* new_end_block = (uint32*)(sbrk_ret + available_size - sizeof(int));
+		*new_end_block = 1;
+
+		return new_block_after_sbrk;
+	}
+	return NULL;
 }
 
 //===================================================
@@ -370,27 +439,28 @@ void free_block(void *va)
 // [6] REALLOCATE BLOCK BY FIRST FIT:
 //=========================================
 
+// Checks if the block can be extended in place.
 __inline__ uint8 can_extend_in_place(void* block, uint32 current_size, uint32 desired_size) {
 	uint32 next_header = *(get_block_footer(block, current_size) + 1);
 	return !IS_ALLOCATED(next_header) && next_header + current_size >= desired_size;
 }
 
 // Splits a block and add frees the remaining part
-void split_block(void* block, uint32 total_size, uint32 requested_size, bool is_allocated) {
-    set_block_data(block, requested_size, is_allocated);
+void split_block(void* block, uint32 total_size, uint32 requested_size) {
+	set_block_data(block, requested_size, DYN_ALLOC_ALLOCATED);
 
-    void* new_free_block = (void*)(block + requested_size);
-    uint32 free_block_size = total_size - requested_size;
+	void* new_free_block = (void*)(block + requested_size);
+	uint32 free_block_size = total_size - requested_size;
 
-    set_block_data(new_free_block, free_block_size, DYN_ALLOC_FREE);
-    free_block(new_free_block);
+	set_block_data(new_free_block, free_block_size, DYN_ALLOC_FREE);
+	free_block(new_free_block);
 }
 
 // Shrinks the block at the given address of the current_size to the new_size
 void shrink_block(void* va, uint32 current_size, uint32 new_size) {
-    if (is_splittable(current_size, new_size)) {
-        split_block(va, current_size, new_size, !is_free_block(va));
-    }
+	if (is_splittable(current_size, new_size)) {
+		split_block(va, current_size, new_size);
+	}
 }
 
 // Extends a block of current_size to the new_size using the next block.
@@ -405,26 +475,22 @@ void extend_block(void* va, uint32 current_size, uint32 new_size) {
 
 	// Checking if it's possible to split and create a new free block.
 	if (is_splittable(total_available_size, new_size)) {
-		split_block(va, total_available_size, new_size, !is_free_block(va));
+		split_block(va, total_available_size, new_size);
 	} else {
-		set_block_data(va, total_available_size, !is_free_block(va));
+		set_block_data(va, total_available_size, DYN_ALLOC_ALLOCATED);
 	}
 }
 
+// Relocates the block to a new block returned from Allocate.
 void* relocate_block(void* va, uint32 current_size, uint32 new_size) {
 	void* new_block = alloc_block_FF(new_size); // Allocate to get a new block that can fit the new size
 	if (new_block == NULL) { return NULL; } // Allocate and sbrk (within Allocate) can't allocate new.
 
-	uint8 is_original_free = is_free_block(va);
-
 	memcpy(new_block, va, current_size); // Copying data from old address to the new one, memcpy is safe hence relocate, no overlap risk.
 	free_block(va); // Freeing the old block, no longer needed.
-	if (is_original_free) free_block(new_block); // Adding the new block to the free list if it was originally free.
 	return new_block; // returning the new address for the re-sized block.
 }
 
-
-// Reallocate preserves the state of the block whether it was allocated or free.
 void *realloc_block_FF(void* va, uint32 new_size)
 {
 	//TODO: [PROJECT'24.MS1 - #08] [3] DYNAMIC ALLOCATOR - realloc_block_FF [DONE]
@@ -440,6 +506,8 @@ void *realloc_block_FF(void* va, uint32 new_size)
 		free_block(va);
 		return NULL;
 	}
+
+	if (new_size % 2 != 0) new_size++;
 
 	uint32 blk_size = get_block_size(va);
 	new_size += DYN_ALLOC_HEADER_FOOTER_SIZE; // Adding size for both header & footer

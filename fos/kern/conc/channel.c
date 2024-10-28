@@ -63,9 +63,21 @@ void sleep(struct Channel *chan, struct spinlock* lk)
 void wakeup_one(struct Channel *chan)
 {
 	//TODO: [PROJECT'24.MS1 - #11] [4] LOCKS - wakeup_one
-	//COMMENT THE FOLLOWING LINE BEFORE START CODING
-	panic("wakeup_one is not implemented yet");
-	//Your Code is Here...
+	// Protecting the queue while adding it to prevent a deadlock
+	acquire_spinlock(&ProcessQueues.qlock);
+
+	// Getting first process from queue
+	if (queue_size(&(chan->queue)) != 0) {
+		struct Env* env = dequeue(&(chan->queue));
+		if (env) {
+			// Mark process as ready
+			env->env_status = ENV_READY;
+			sched_insert_ready0(env);
+		}
+	}
+
+	// Releasing the queue for other processes.
+	release_spinlock(&ProcessQueues.qlock);
 }
 
 //====================================================

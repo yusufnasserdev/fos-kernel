@@ -28,7 +28,7 @@ void init_channel(struct Channel *chan, char *name)
 // Ref: xv6-x86 OS code
 void sleep(struct Channel *chan, struct spinlock* lk)
 {
-	//TODO: [PROJECT'24.MS1 - #10] [4] LOCKS - sleep
+	//TODO: [PROJECT'24.MS1 - #10] [4] LOCKS - sleep [DONE]
 
 	// Getting the current process
 	struct Env* curr_env = get_cpu_proc();
@@ -62,7 +62,7 @@ void sleep(struct Channel *chan, struct spinlock* lk)
 // chan MUST be of type "struct Env_Queue" to hold the blocked processes
 void wakeup_one(struct Channel *chan)
 {
-	//TODO: [PROJECT'24.MS1 - #11] [4] LOCKS - wakeup_one
+	//TODO: [PROJECT'24.MS1 - #11] [4] LOCKS - wakeup_one [DONE]
 	// Protecting the queue while adding it to prevent a deadlock
 	acquire_spinlock(&ProcessQueues.qlock);
 
@@ -90,7 +90,7 @@ void wakeup_one(struct Channel *chan)
 
 void wakeup_all(struct Channel *chan)
 {
-	//TODO: [PROJECT'24.MS1 - #12] [4] LOCKS - wakeup_all
+	//TODO: [PROJECT'24.MS1 - #12] [4] LOCKS - wakeup_all [DONE]
 	struct Env* curr_env;
 
 	// Protecting the queue while adding it to prevent a deadlock

@@ -32,10 +32,27 @@ int holding_sleeplock(struct sleeplock *lk)
 
 void acquire_sleeplock(struct sleeplock *lk)
 {
-	//TODO: [PROJECT'24.MS1 - #13] [4] LOCKS - acquire_sleeplock
-	//COMMENT THE FOLLOWING LINE BEFORE START CODING
-	panic("acquire_sleeplock is not implemented yet");
-	//Your Code is Here...
+	//TODO: [PROJECT'24.MS1 - #13] [4] LOCKS - acquire_sleeplock [DONE]
+	
+	if(holding_sleeplock(lk)) {
+		panic("acquire_sleeplock: lock \"%s\" is already held by the same CPU.", lk->name);
+	}
+
+	// Acquire guard spin lock
+	acquire_spinlock(&lk->lk);
+
+	// While lock is held by another process
+	while (lk->locked) {
+		// Sleep on the channel
+		sleep(&lk->chan, &lk->lk);
+	}
+
+	// Mark the sleep lock status as busy
+	lk->locked = 1;
+	lk->pid = get_cpu_proc()->env_id;
+
+	// Release guard spin lock
+	release_spinlock(&lk->lk);
 
 }
 

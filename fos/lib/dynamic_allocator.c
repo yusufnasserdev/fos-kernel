@@ -358,8 +358,7 @@ void free_block(void *va)
 		 * both header & footer to reach the start of where the data should be allocated.
 		 */
 
-		struct BlockElement* merged_block = (struct BlockElement*)
-										((uint32)prev_block_footer - (*prev_block_footer) + DYN_ALLOC_HEADER_FOOTER_SIZE);
+		void* merged_block = (void*)((uint32)prev_block_footer - (*prev_block_footer) + DYN_ALLOC_HEADER_FOOTER_SIZE);
 
 		// Re-setting the merged block data.
 		set_block_data(merged_block, block_new_size, DYN_ALLOC_FREE);
@@ -416,11 +415,16 @@ void* relocate_block(void* va, uint32 current_size, uint32 new_size) {
 	void* new_block = alloc_block_FF(new_size); // Allocate to get a new block that can fit the new size
 	if (new_block == NULL) { return NULL; } // Allocate and sbrk (within Allocate) can't allocate new.
 
+	uint8 is_original_free = is_free_block(va);
+
 	memcpy(new_block, va, current_size); // Copying data from old address to the new one, memcpy is safe hence relocate, no overlap risk.
 	free_block(va); // Freeing the old block, no longer needed.
+	if (is_original_free) free_block(new_block); // Adding the new block to the free list if it was originally free.
 	return new_block; // returning the new address for the re-sized block.
 }
 
+
+// Reallocate preserves the state of the block whether it was allocated or free.
 void *realloc_block_FF(void* va, uint32 new_size)
 {
 	//TODO: [PROJECT'24.MS1 - #08] [3] DYNAMIC ALLOCATOR - realloc_block_FF [DONE]
@@ -430,12 +434,12 @@ void *realloc_block_FF(void* va, uint32 new_size)
 		else { return alloc_block_FF(new_size); }
 	}
 
+	if (!valid_block_address(va)) return NULL;
+
 	if (new_size == 0) { // Free intended
 		free_block(va);
 		return NULL;
 	}
-
-	if (!valid_block_address(va)) return NULL;
 
 	uint32 blk_size = get_block_size(va);
 	new_size += DYN_ALLOC_HEADER_FOOTER_SIZE; // Adding size for both header & footer
@@ -451,6 +455,9 @@ void *realloc_block_FF(void* va, uint32 new_size)
 		return va;
 	}
 
+	// Removing the added size for both header & footer, as relocate will be calling allocate
+	// Allocate will be re-adding them when trying to allocate new.
+	new_size -= DYN_ALLOC_HEADER_FOOTER_SIZE;
 	return relocate_block(va, blk_size, new_size); // Only option left is to relocate.
 }
 

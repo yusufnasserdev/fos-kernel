@@ -1543,33 +1543,68 @@ void test_realloc_block_FF()
 	cprintf("  6.1: Basic relocation\n\n");
 	is_correct = 1;
 	{
-		// Choose a block surrounded by allocated blocks
-		blockIndex = 1*allocCntPerSize + 1;
-		int old_size = allocSizes[1] - sizeOfMetaData;
-		int new_size = old_size * 2; // Double the size
+	    // Choose a block that has allocated blocks before and after it
+	    blockIndex = 1*allocCntPerSize + 1;
+	    int prevBlockIndex = blockIndex - 1;
+	    int nextBlockIndex = blockIndex + 1;
 
-		// Store original data
-		int original_start = *(startVAs[blockIndex]);
-		int original_mid = *(midVAs[blockIndex]);
+	    // Verify surrounding blocks are allocated (not free)
+	    // If surrounding blocks aren't allocated, allocate them
+	    if (is_free_block(startVAs[prevBlockIndex])) {
+	    	LIST_REMOVE(&freeBlocksList, (struct BlockElement*) startVAs[prevBlockIndex]);
+	    	set_block_data(startVAs[prevBlockIndex], get_block_size(startVAs[prevBlockIndex]), DYN_ALLOC_ALLOCATED);
+	    }
+	    if (is_free_block(startVAs[nextBlockIndex])) {
+	    	LIST_REMOVE(&freeBlocksList, (struct BlockElement*) startVAs[nextBlockIndex]);
+	    	set_block_data(startVAs[nextBlockIndex], get_block_size(startVAs[nextBlockIndex]), DYN_ALLOC_ALLOCATED);
+	    }
 
-		// Reallocate
-		void* new_va = realloc_block_FF(startVAs[blockIndex], new_size);
+	    int old_size = allocSizes[1] - sizeOfMetaData;
+	    int new_size = old_size * 2; // Double the size
+	    void* original_address = startVAs[blockIndex];
 
-		// Verify new block
-		if (new_va == startVAs[blockIndex]) {
-			is_correct = 0;
-			cprintf("test_realloc_block_FF #6.1.1: Failed - Should have relocated\n");
-		}
+	    // Store original data and block state
+	    int original_start = *(startVAs[blockIndex]);
+	    int original_mid = *(midVAs[blockIndex]);
+	    uint8 is_original_free = is_free_block(original_address);
+	    uint32 original_block_size = get_block_size(original_address);
 
-		// Verify data was copied
-		if (*(int*)new_va != original_start ||
-				*(int*)(new_va + old_size/2) != original_mid) // Here old size, as relocate doesn't stretch, the added region is not set.
-		{
-			is_correct = 0;
-			cprintf("test_realloc_block_FF #6.1.2: Failed - Data not copied correctly\n");
-		}
+	    // Reallocate
+	    void* new_va = realloc_block_FF(startVAs[blockIndex], new_size);
+
+	    // Verify relocation occurred
+	    if (new_va == original_address) {
+	        is_correct = 0;
+	        cprintf("test_realloc_block_FF #6.1.1: Failed - Should have relocated due to surrounding allocated blocks\n");
+	    }
+
+	    // Verify original block was freed
+	    if (!is_free_block(original_address)) {
+	        is_correct = 0;
+	        cprintf("test_realloc_block_FF #6.1.2: Failed - Original block should be freed after relocation\n");
+	    }
+
+	    if (get_block_size(original_address) != original_block_size) {
+	        is_correct = 0;
+	        cprintf("test_realloc_block_FF #6.1.3: Failed - Original block size was modified\n");
+	    }
+
+	    // Verify data was copied correctly
+	    if (*(int*)new_va != original_start ||
+	        *(int*)(new_va + old_size/2) != original_mid) { // Here old size, as relocate doesn't stretch, the added region
+	        is_correct = 0;
+	        cprintf("test_realloc_block_FF #6.1.4: Failed - Data not copied correctly\n");
+	    }
+
+	    // Verify new block properties
+	    uint32 expected_new_size = ROUNDUP(new_size + sizeOfMetaData, 2);
+
+	    if (get_block_size(new_va) != expected_new_size || is_free_block(new_va) != is_original_free) {
+	        is_correct = 0;
+	        cprintf("test_realloc_block_FF #6.1.5: Failed - New block has incorrect size or allocation status\n");
+	    }
 	}
-	if (is_correct) eval += 10;
+	if (is_correct) eval += 15;
 
 	//[6.2] Relocation with no suitable free block
 	cprintf("  6.2: Relocation with no suitable space\n\n");
@@ -1586,7 +1621,7 @@ void test_realloc_block_FF()
 			cprintf("test_realloc_block_FF #6.2: Failed - Should return NULL when no space\n");
 		}
 	}
-	if (is_correct) eval += 15;
+	if (is_correct) eval += 10;
 
 	//====================================================================//
 	//[7] Test invalid addresses

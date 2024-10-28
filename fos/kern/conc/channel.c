@@ -29,10 +29,28 @@ void init_channel(struct Channel *chan, char *name)
 void sleep(struct Channel *chan, struct spinlock* lk)
 {
 	//TODO: [PROJECT'24.MS1 - #10] [4] LOCKS - sleep
-	//COMMENT THE FOLLOWING LINE BEFORE START CODING
-	panic("sleep is not implemented yet");
-	//Your Code is Here...
 
+	// Getting the current process
+	struct Env* curr_env = get_cpu_proc();
+
+	// Protecting the queue while adding it to prevent a deadlock
+	acquire_spinlock(&ProcessQueues.qlock);
+
+	// Marking process as blocked & Adding the current process to queue
+	curr_env->env_status = ENV_BLOCKED;
+	enqueue(&(chan->queue), curr_env);
+
+	// Releasing the guard lock for the original sleep lock to allow for other processes to sleep and join the wait.
+	release_spinlock(lk);
+
+	// Call the scheduler to resume with other processes
+	sched();
+
+	// Once woke up, re-acquire lock
+	acquire_spinlock(lk);
+
+	// Releasing the queue for other processes.
+	release_spinlock(&ProcessQueues.qlock);
 }
 
 //==================================================

@@ -1217,7 +1217,7 @@ void test_realloc_block_FF()
 	return;
 #endif
 
-	//TODO: [PROJECT'24.MS1 - #09] [3] DYNAMIC ALLOCATOR - test_realloc_block_FF()
+	//TODO: [PROJECT'24.MS1 - #09] [3] DYNAMIC ALLOCATOR - test_realloc_block_FF() [DONE]
 	//CHECK MISSING CASES AND TRY TO TEST THEM !
 
 	cprintf("===================================================\n");
@@ -1501,6 +1501,116 @@ void test_realloc_block_FF()
 	}
 
 	cprintf("[PARTIAL] test realloc_block with FIRST FIT completed. Evaluation = %d%\n", eval);
+
+	//====================================================================//
+	//[5] Test realloc with same size (no change)
+	//====================================================================//
+	cprintf("5: Test realloc with same size [5%]\n\n");
+	is_correct = 1;
+	{
+		// Choose an allocated block to test
+		blockIndex = 2*allocCntPerSize + 1;
+		int current_size = allocSizes[2] - sizeOfMetaData;
+
+		expectedSize = allocSizes[2];
+		expectedVA = startVAs[blockIndex];
+
+		// Reallocate with same size
+		va = realloc_block_FF(startVAs[blockIndex], current_size);
+
+		// Block should remain unchanged
+		if (check_block(va, expectedVA, expectedSize, 1) == 0)
+		{
+			is_correct = 0;
+			cprintf("test_realloc_block_FF #5.1: Failed - Block changed when it shouldn't\n");
+		}
+
+		// Data should be preserved
+		if (*(startVAs[blockIndex]) != blockIndex || *(midVAs[blockIndex]) != blockIndex)
+		{
+			is_correct = 0;
+			cprintf("test_realloc_block_FF #5.2: Failed - Data not preserved\n");
+		}
+	}
+	if (is_correct) eval += 5;
+
+	//====================================================================//
+	//[6] Test realloc with relocation scenarios
+	//====================================================================//
+	cprintf("6: Test realloc with relocation scenarios [25%]\n\n");
+
+	//[6.1] Basic relocation when current block can't expand
+	cprintf("  6.1: Basic relocation\n\n");
+	is_correct = 1;
+	{
+		// Choose a block surrounded by allocated blocks
+		blockIndex = 1*allocCntPerSize + 1;
+		int old_size = allocSizes[1] - sizeOfMetaData;
+		int new_size = old_size * 2; // Double the size
+
+		// Store original data
+		int original_start = *(startVAs[blockIndex]);
+		int original_mid = *(midVAs[blockIndex]);
+
+		// Reallocate
+		void* new_va = realloc_block_FF(startVAs[blockIndex], new_size);
+
+		// Verify new block
+		if (new_va == startVAs[blockIndex]) {
+			is_correct = 0;
+			cprintf("test_realloc_block_FF #6.1.1: Failed - Should have relocated\n");
+		}
+
+		// Verify data was copied
+		if (*(int*)new_va != original_start ||
+				*(int*)(new_va + old_size/2) != original_mid) // Here old size, as relocate doesn't stretch, the added region is not set.
+		{
+			is_correct = 0;
+			cprintf("test_realloc_block_FF #6.1.2: Failed - Data not copied correctly\n");
+		}
+	}
+	if (is_correct) eval += 10;
+
+	//[6.2] Relocation with no suitable free block
+	cprintf("  6.2: Relocation with no suitable space\n\n");
+	is_correct = 1;
+	{
+		// Try to reallocate with a size larger than any free block
+		blockIndex = 3*allocCntPerSize + 1;
+		int massive_size = initAllocatedSpace; // Entire heap initial size, sbrk not implemented yet.
+
+		va = realloc_block_FF(startVAs[blockIndex], massive_size);
+
+		if (va != NULL) {
+			is_correct = 0;
+			cprintf("test_realloc_block_FF #6.2: Failed - Should return NULL when no space\n");
+		}
+	}
+	if (is_correct) eval += 15;
+
+	//====================================================================//
+	//[7] Test invalid addresses
+	//====================================================================//
+	cprintf("7: Test invalid addresses [10%]\n\n");
+	is_correct = 1;
+	{
+		// Test 7.1: Invalid address (within heap but not @ block start)
+		// Try to reallocate with a size larger than any free block
+		blockIndex = 3*allocCntPerSize + 1;
+		void* invalid_addr = (void*)((char*)startVAs[blockIndex] + 3); // Random offset
+		va = realloc_block_FF(invalid_addr, 100);
+		if (va != NULL) {
+			is_correct = 0;
+			cprintf("test_realloc_block_FF #7.1: Failed - Should return NULL for invalid address\n");
+		}
+
+		// Address outside heap range is handled differently by the hardware.
+
+	}
+	if (is_correct) eval += 10;
+
+	//====================================================================//
+	cprintf("END of test realloc_block_FF evaluation = %d% out of 140% (Additional 40% for written tests) \n", eval);
 
 }
 

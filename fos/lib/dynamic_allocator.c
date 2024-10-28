@@ -106,6 +106,12 @@ __inline__ uint8 is_splittable(uint32 total_size, uint32 requested_size) {
 	return total_size >= MIN_SPLIT_THRESHOLD(requested_size);
 }
 
+// Checks if both header and footer are set correctly, no way to check for boundaries as handled by hardware fault.
+// We can define new variable that holds the_a_block and the_z_block as boundaries, however, as per the design so far, no need.
+uint8 valid_block_address(void* va) {
+	return *get_block_header(va) == *get_block_footer(va, get_block_size(va));
+}
+
 
 // Allocates a free block and removes it from the list.
 void allocate_free_block(struct BlockElement* block, uint32 size) {
@@ -245,7 +251,7 @@ void *alloc_block_FF(uint32 size)
 
 	uint32 sbrk_ret = (uint32)sbrk(ROUNDUP(size, PAGE_SIZE)/PAGE_SIZE);
 
-	if (sbrk_ret != -1) {
+	if (sbrk_ret != -1) { //TODO YET TO BE TESTED, MUST BE RE-CHECKED WHEN SBRK IS IMPLEMENTED
 		uint32 available_size = ROUNDUP(size, PAGE_SIZE);
 
 		// The new block to be placed @ the start of the newly added space to the heap.
@@ -410,40 +416,32 @@ void* relocate_block(void* va, uint32 current_size, uint32 new_size) {
 	void* new_block = alloc_block_FF(new_size); // Allocate to get a new block that can fit the new size
 	if (new_block == NULL) { return NULL; } // Allocate and sbrk (within Allocate) can't allocate new.
 
-	memmove(new_block, va, current_size); // Copying data from old address to the new one.
+	memcpy(new_block, va, current_size); // Copying data from old address to the new one, memcpy is safe hence relocate, no overlap risk.
 	free_block(va); // Freeing the old block, no longer needed.
 	return new_block; // returning the new address for the re-sized block.
 }
 
-
-
 void *realloc_block_FF(void* va, uint32 new_size)
 {
-	//TODO: [PROJECT'24.MS1 - #08] [3] DYNAMIC ALLOCATOR - realloc_block_FF [DOING]
+	//TODO: [PROJECT'24.MS1 - #08] [3] DYNAMIC ALLOCATOR - realloc_block_FF [DONE]
 
-	// Special cases
-	if (va == NULL) {
+	if (va == NULL) { // Nothing to reallocate, either allocate intended or dummy case
 		if (new_size == 0) { return NULL; }
 		else { return alloc_block_FF(new_size); }
 	}
 
-	if (new_size == 0) {
+	if (new_size == 0) { // Free intended
 		free_block(va);
 		return NULL;
 	}
 
+	if (!valid_block_address(va)) return NULL;
+
 	uint32 blk_size = get_block_size(va);
 	new_size += DYN_ALLOC_HEADER_FOOTER_SIZE; // Adding size for both header & footer
 
-	if (new_size == blk_size) {
-		cprintf("\n New_size == blk_size NEVER TESTED\n");
-		cprintf("\n New_size == blk_size NEVER TESTED\n");
-		cprintf("\n New_size == blk_size NEVER TESTED\n");
-		return va;
-	}
-
 	// Decreasing the size
-	if (new_size < blk_size) {
+	if (new_size <= blk_size) {
 		shrink_block(va, blk_size, new_size);
 		return va;
 	}
@@ -452,11 +450,6 @@ void *realloc_block_FF(void* va, uint32 new_size)
 		extend_block(va, blk_size, new_size);
 		return va;
 	}
-
-	cprintf("\nRELOCATE NEVER TESTED\n");
-	cprintf("\nRELOCATE NEVER TESTED\n");
-	cprintf("\nRELOCATE NEVER TESTED\n");
-
 
 	return relocate_block(va, blk_size, new_size); // Only option left is to relocate.
 }

@@ -1566,7 +1566,6 @@ void test_realloc_block_FF()
 	    // Store original data and block state
 	    int original_start = *(startVAs[blockIndex]);
 	    int original_mid = *(midVAs[blockIndex]);
-	    uint8 is_original_free = is_free_block(original_address);
 	    uint32 original_block_size = get_block_size(original_address);
 
 	    // Reallocate
@@ -1599,7 +1598,7 @@ void test_realloc_block_FF()
 	    // Verify new block properties
 	    uint32 expected_new_size = ROUNDUP(new_size + sizeOfMetaData, 2);
 
-	    if (get_block_size(new_va) != expected_new_size || is_free_block(new_va) != is_original_free) {
+	    if (get_block_size(new_va) != expected_new_size || is_free_block(new_va)) {
 	        is_correct = 0;
 	        cprintf("test_realloc_block_FF #6.1.5: Failed - New block has incorrect size or allocation status\n");
 	    }

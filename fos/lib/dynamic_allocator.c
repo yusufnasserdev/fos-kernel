@@ -370,14 +370,15 @@ void free_block(void *va)
 // [6] REALLOCATE BLOCK BY FIRST FIT:
 //=========================================
 
+// Checks if the block can be extended in place.
 __inline__ uint8 can_extend_in_place(void* block, uint32 current_size, uint32 desired_size) {
 	uint32 next_header = *(get_block_footer(block, current_size) + 1);
 	return !IS_ALLOCATED(next_header) && next_header + current_size >= desired_size;
 }
 
 // Splits a block and add frees the remaining part
-void split_block(void* block, uint32 total_size, uint32 requested_size, bool is_allocated) {
-    set_block_data(block, requested_size, is_allocated);
+void split_block(void* block, uint32 total_size, uint32 requested_size) {
+    set_block_data(block, requested_size, DYN_ALLOC_ALLOCATED);
 
     void* new_free_block = (void*)(block + requested_size);
     uint32 free_block_size = total_size - requested_size;
@@ -389,7 +390,7 @@ void split_block(void* block, uint32 total_size, uint32 requested_size, bool is_
 // Shrinks the block at the given address of the current_size to the new_size
 void shrink_block(void* va, uint32 current_size, uint32 new_size) {
     if (is_splittable(current_size, new_size)) {
-        split_block(va, current_size, new_size, !is_free_block(va));
+        split_block(va, current_size, new_size);
     }
 }
 
@@ -405,26 +406,22 @@ void extend_block(void* va, uint32 current_size, uint32 new_size) {
 
 	// Checking if it's possible to split and create a new free block.
 	if (is_splittable(total_available_size, new_size)) {
-		split_block(va, total_available_size, new_size, !is_free_block(va));
+		split_block(va, total_available_size, new_size);
 	} else {
-		set_block_data(va, total_available_size, !is_free_block(va));
+		set_block_data(va, total_available_size, DYN_ALLOC_ALLOCATED);
 	}
 }
 
+// Relocates the block to a new block returned from Allocate.
 void* relocate_block(void* va, uint32 current_size, uint32 new_size) {
 	void* new_block = alloc_block_FF(new_size); // Allocate to get a new block that can fit the new size
 	if (new_block == NULL) { return NULL; } // Allocate and sbrk (within Allocate) can't allocate new.
 
-	uint8 is_original_free = is_free_block(va);
-
 	memcpy(new_block, va, current_size); // Copying data from old address to the new one, memcpy is safe hence relocate, no overlap risk.
 	free_block(va); // Freeing the old block, no longer needed.
-	if (is_original_free) free_block(new_block); // Adding the new block to the free list if it was originally free.
 	return new_block; // returning the new address for the re-sized block.
 }
 
-
-// Reallocate preserves the state of the block whether it was allocated or free.
 void *realloc_block_FF(void* va, uint32 new_size)
 {
 	//TODO: [PROJECT'24.MS1 - #08] [3] DYNAMIC ALLOCATOR - realloc_block_FF [DONE]

@@ -91,9 +91,23 @@ void wakeup_one(struct Channel *chan)
 void wakeup_all(struct Channel *chan)
 {
 	//TODO: [PROJECT'24.MS1 - #12] [4] LOCKS - wakeup_all
-	//COMMENT THE FOLLOWING LINE BEFORE START CODING
-	panic("wakeup_all is not implemented yet");
-	//Your Code is Here...
+	struct Env* curr_env;
+
+	// Protecting the queue while adding it to prevent a deadlock
+	acquire_spinlock(&ProcessQueues.qlock);
+
+
+	// Wake up all processes in queue
+	while (queue_size(&(chan->queue)) != 0) {
+		curr_env = dequeue(&(chan->queue));
+		if (curr_env) {
+			curr_env->env_status = ENV_READY;
+			sched_insert_ready0(curr_env);
+		}
+	}
+
+	// Releasing the queue for other processes.
+	release_spinlock(&ProcessQueues.qlock);
 
 }
 

@@ -58,10 +58,23 @@ void acquire_sleeplock(struct sleeplock *lk)
 
 void release_sleeplock(struct sleeplock *lk)
 {
-	//TODO: [PROJECT'24.MS1 - #14] [4] LOCKS - release_sleeplock
-	//COMMENT THE FOLLOWING LINE BEFORE START CODING
-	panic("release_sleeplock is not implemented yet");
-	//Your Code is Here...
+	//TODO: [PROJECT'24.MS1 - #14] [4] LOCKS - release_sleeplock [DONE]
+	
+	if(!holding_sleeplock(lk)) {
+		panic("release_sleeplock: lock \"%s\" is either not held or held by another CPU!", lk->name);
+	}
+
+	// Acquire guard spin lock
+	acquire_spinlock(&lk->lk);
+
+	wakeup_all(&lk->chan);
+
+	// Mark the sleep lock status as free
+	lk->locked = 0;
+	lk->pid = 0;
+
+	// Release guard spin lock
+	release_spinlock(&lk->lk);
 
 }
 

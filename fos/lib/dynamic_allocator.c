@@ -483,9 +483,10 @@ void extend_block(void* va, uint32 current_size, uint32 new_size) {
 
 // Relocates the block to a new block returned from Allocate.
 void* relocate_block(void* va, uint32 current_size, uint32 new_size) {
+	//cprintf("Relocating\n");
 	void* new_block = alloc_block_FF(new_size); // Allocate to get a new block that can fit the new size
 	if (new_block == NULL) { return NULL; } // Allocate and sbrk (within Allocate) can't allocate new.
-
+	//cprintf("Relocating NEW ADDRESS: %x\n", new_block);
 	memcpy(new_block, va, current_size); // Copying data from old address to the new one, memcpy is safe hence relocate, no overlap risk.
 	free_block(va); // Freeing the old block, no longer needed.
 	return new_block; // returning the new address for the re-sized block.

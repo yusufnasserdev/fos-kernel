@@ -12,9 +12,33 @@
 //	Otherwise (if no memory OR initial size exceed the given limit): PANIC
 int initialize_kheap_dynamic_allocator(uint32 daStart, uint32 initSizeToAllocate, uint32 daLimit)
 {
-	//TODO: [PROJECT'24.MS2 - #01] [1] KERNEL HEAP - initialize_kheap_dynamic_allocator
-	// Write your code here, remove the panic and write your code
-	panic("initialize_kheap_dynamic_allocator() is not implemented yet...!!");
+	//TODO: [PROJECT'24.MS2 - #01] [1] KERNEL HEAP - initialize_kheap_dynamic_allocator [DONE]
+
+	// Initialize tracking variables
+	kh_soft_cap = kh_alloc_base = ROUNDDOWN(daStart, PAGE_SIZE); // ensuring that they align with first page boundary.
+	kh_hard_cap = daLimit;
+
+    initSizeToAllocate = ROUNDUP(initSizeToAllocate, PAGE_SIZE); // Aligning the requested size to a page boundary
+
+	// Initial size exceeds the given limit
+	if (daStart + initSizeToAllocate > daLimit) {
+		panic("INIT KHEAP DYNAMIC ALLOCATOR FAILED: Initial size exceeds the given limit\n");
+	}
+
+    kh_soft_cap += initSizeToAllocate; // Extending the soft cap to the requested size as it's ensured to be feasible.
+
+
+	// Allocate the pages in the given range and map them.
+	for (int i = kh_alloc_base; i < kh_soft_cap; i+=PAGE_SIZE) {
+		struct FrameInfo* new_frame;
+		allocate_frame(&new_frame); // Panics if no memory available
+		map_frame(ptr_page_directory, new_frame, i, PERM_WRITEABLE);
+	}
+
+	// Dynamic Allocator manages the block allocation, hence initialized.
+	initialize_dynamic_allocator(kh_alloc_base, initSizeToAllocate);
+
+	return 0;
 }
 
 void* sbrk(int numOfPages)
@@ -29,13 +53,9 @@ void* sbrk(int numOfPages)
 	 * 		or the break exceed the limit of the dynamic allocator. If sbrk fails, return -1
 	 */
 
-	//MS2: COMMENT THIS LINE BEFORE START CODING==========
-	return (void*)-1 ;
-	//====================================================
-
 	//TODO: [PROJECT'24.MS2 - #02] [1] KERNEL HEAP - sbrk
-	// Write your code here, remove the panic and write your code
-	panic("sbrk() is not implemented yet...!!");
+
+
 }
 
 //TODO: [PROJECT'24.MS2 - BONUS#2] [1] KERNEL HEAP - Fast Page Allocator

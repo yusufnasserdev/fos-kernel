@@ -41,7 +41,11 @@ unsigned int kheap_physical_address(unsigned int virtual_address);
 int numOfKheapVACalls ;
 
 
-//TODO: [PROJECT'24.MS2 - #01] [1] KERNEL HEAP - add suitable code here
+//TODO: [PROJECT'24.MS2 - #01] [1] KERNEL HEAP - add suitable code here [DONE]
+
+uint32 kh_alloc_base;	// Kernel heap base address
+uint32 kh_soft_cap;		// Kernel heap segment break, 'soft' cap as it can be extended
+uint32 kh_hard_cap;		// Kernel heap block allocation end, 'hard' cap as it CANNOT be breached.
 
 
 #endif // FOS_KERN_KHEAP_H_

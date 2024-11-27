@@ -117,14 +117,8 @@ unsigned int kheap_physical_address(unsigned int virtual_address)
 
 unsigned int kheap_virtual_address(unsigned int physical_address)
 {
-	//TODO: [PROJECT'24.MS2 - #06] [1] KERNEL HEAP - kheap_virtual_address
-	// Write your code here, remove the panic and write your code
-	panic("kheap_virtual_address() is not implemented yet...!!");
-
-	//return the virtual address corresponding to given physical_address
-	//refer to the project presentation and documentation for details
-
-	//EFFICIENT IMPLEMENTATION ~O(1) IS REQUIRED ==================
+	//TODO: [PROJECT'24.MS2 - #06] [1] KERNEL HEAP - kheap_virtual_address [DONE]
+	return to_frame_info(physical_address)->virtual_address;
 }
 //=================================================================================//
 //============================== BONUS FUNCTION ===================================//

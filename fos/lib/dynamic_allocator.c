@@ -251,26 +251,43 @@ void *alloc_block_FF(uint32 size)
 
 	uint32 sbrk_ret = (uint32)sbrk(ROUNDUP(size, PAGE_SIZE)/PAGE_SIZE);
 
-	if (sbrk_ret != -1) { //TODO YET TO BE TESTED, MUST BE RE-CHECKED WHEN SBRK IS IMPLEMENTED
+	if (sbrk_ret != -1) {
 		uint32 available_size = ROUNDUP(size, PAGE_SIZE);
+		struct BlockElement* new_block;
 
-		// The new block to be placed @ the start of the newly added space to the heap.
-		// The old special ending block will become the header for this block.
-		struct BlockElement* new_block_after_sbrk = (struct BlockElement*)sbrk_ret;
+		/**
+		 * Check if the current last block is free to merge before allocating.
+		 */
 
-		// Check if it can be split to eliminate internal fragmentation.
-		if (is_splittable(available_size, size)) {
-			split_free_block_and_allocate(new_block_after_sbrk, size, available_size);
-		}
-		else {
-			allocate_free_block(new_block_after_sbrk, available_size);
+		uint32* prev_block_footer = get_block_header(sbrk_ret) - 2; // - 2 as there is a special end block in the way.
+
+		// Merge with previous block
+		if (!IS_ALLOCATED(*prev_block_footer)) {
+			// re-set the prev_block data to new size
+			uint32 block_new_size = available_size + (*prev_block_footer);
+			new_block = (void*)((uint32)prev_block_footer - (*prev_block_footer) + DYN_ALLOC_HEADER_FOOTER_SIZE);
+
+			// Re-setting the merged block data.
+			set_block_data(new_block, block_new_size, DYN_ALLOC_FREE);
+		} else {
+			// The new block to be placed @ the start of the newly added space to the heap.
+			// The old special ending block will become the header for this block.
+			new_block = (struct BlockElement*)sbrk_ret;
+
+			// Check if it can be split to eliminate internal fragmentation.
+			if (is_splittable(available_size, size)) {
+				split_free_block_and_allocate(new_block, size, available_size);
+			}
+			else {
+				allocate_free_block(new_block, available_size);
+			}
+
 		}
 
 		uint32* new_end_block = (uint32*)(sbrk_ret + available_size - sizeof(int)) ;
 		*new_end_block = 1;
 
-
-		return new_block_after_sbrk;
+		return new_block;
 	}
 
 	return NULL;
@@ -337,22 +354,43 @@ void *alloc_block_BF(uint32 size)
 	uint32 sbrk_ret = (uint32)sbrk(ROUNDUP(size, PAGE_SIZE)/PAGE_SIZE);
 	if (sbrk_ret != -1) {
 		uint32 available_size = ROUNDUP(size, PAGE_SIZE);
-		// The new block to be placed @ the start of the newly added space to the heap
-		// The old special ending block will become the header for this block
-		struct BlockElement* new_block_after_sbrk = (struct BlockElement*)sbrk_ret;
-		// Check if it can be split to eliminate internal fragmentation
-		if (is_splittable(available_size, size)) {
-			split_free_block_and_allocate(new_block_after_sbrk, size, available_size);
-		}
-		else {
-			allocate_free_block(new_block_after_sbrk, available_size);
+		struct BlockElement* new_block;
+
+		/**
+		 * Check if the current last block is free to merge before allocating.
+		 */
+
+		uint32* prev_block_footer = get_block_header(sbrk_ret) - 2; // - 2 as there is a special end block in the way.
+
+		// Merge with previous block
+		if (!IS_ALLOCATED(*prev_block_footer)) {
+			// re-set the prev_block data to new size
+			uint32 block_new_size = available_size + (*prev_block_footer);
+			new_block = (void*)((uint32)prev_block_footer - (*prev_block_footer) + DYN_ALLOC_HEADER_FOOTER_SIZE);
+
+			// Re-setting the merged block data.
+			set_block_data(new_block, block_new_size, DYN_ALLOC_FREE);
+		} else {
+			// The new block to be placed @ the start of the newly added space to the heap.
+			// The old special ending block will become the header for this block.
+			new_block = (struct BlockElement*)sbrk_ret;
+
+			// Check if it can be split to eliminate internal fragmentation.
+			if (is_splittable(available_size, size)) {
+				split_free_block_and_allocate(new_block, size, available_size);
+			}
+			else {
+				allocate_free_block(new_block, available_size);
+			}
+
 		}
 
-		uint32* new_end_block = (uint32*)(sbrk_ret + available_size - sizeof(int));
+		uint32* new_end_block = (uint32*)(sbrk_ret + available_size - sizeof(int)) ;
 		*new_end_block = 1;
 
-		return new_block_after_sbrk;
+		return new_block;
 	}
+
 	return NULL;
 }
 

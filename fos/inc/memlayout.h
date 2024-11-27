@@ -211,6 +211,7 @@ struct FrameInfo {
 	// frames allocated at boot time using memory_manager.c's
 	// boot_allocate_space do not have valid reference count fields.
 	uint16 references;
+	uint32 virtual_address; // For O(1) translation, address had to be stored when mapping to avoid a much more complex and expensive translation.
 
 	struct Env *proc;
 	uint32 bufferedVA;

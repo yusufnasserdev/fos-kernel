@@ -25,14 +25,15 @@ int initialize_kheap_dynamic_allocator(uint32 daStart, uint32 initSizeToAllocate
 		panic("INIT KHEAP DYNAMIC ALLOCATOR FAILED: Initial size exceeds the given limit\n");
 	}
 
-    kh_soft_cap += initSizeToAllocate; // Extending the soft cap to the requested size as it's ensured to be feasible.
+    kh_soft_cap += initSizeToAllocate; // Extending the soft cap to the requested size as it's ensured to be feasible with the given limit.
 
 
 	// Allocate the pages in the given range and map them.
-	for (int i = kh_alloc_base; i < kh_soft_cap; i+=PAGE_SIZE) {
+	for (uint32 i = kh_alloc_base; i < kh_soft_cap; i+=PAGE_SIZE) {
 		struct FrameInfo* new_frame;
 		allocate_frame(&new_frame); // Panics if no memory available
 		map_frame(ptr_page_directory, new_frame, i, PERM_WRITEABLE);
+		new_frame->virtual_address = i;
 	}
 
 	// Dynamic Allocator manages the block allocation, hence initialized.
@@ -55,7 +56,28 @@ void* sbrk(int numOfPages)
 
 	//TODO: [PROJECT'24.MS2 - #02] [1] KERNEL HEAP - sbrk
 
+	// This is not defined in the requirements, however, it's a corner case, the ACMer in me had to handle it.
+	if (numOfPages < 0) panic("KHeap SBRK: CANNOT ALLOCATE NEGATIVE NUM OF PAGES");
+	if (numOfPages == 0) return (void*) kh_soft_cap;
 
+	if (kh_soft_cap + (numOfPages * PAGE_SIZE) < kh_hard_cap) { // Could be <=
+		// move soft cap
+		uint32 new_start = kh_soft_cap;
+		kh_soft_cap += (numOfPages * PAGE_SIZE);
+
+		// allocate and map
+		for (uint32 i = new_start; i < kh_soft_cap; i+=PAGE_SIZE) {
+			struct FrameInfo* new_frame;
+			allocate_frame(&new_frame); // Panics if no memory available
+			map_frame(ptr_page_directory, new_frame, i, PERM_WRITEABLE);
+			new_frame->virtual_address = i;
+		}
+
+		// return start of allocated space
+		return (void*) new_start;
+	}
+
+	return (void*)-1 ;
 }
 
 //TODO: [PROJECT'24.MS2 - BONUS#2] [1] KERNEL HEAP - Fast Page Allocator

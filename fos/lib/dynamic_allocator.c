@@ -259,7 +259,7 @@ void *alloc_block_FF(uint32 size)
 		 * Check if the current last block is free to merge before allocating.
 		 */
 
-		uint32* prev_block_footer = get_block_header(sbrk_ret) - 2; // - 2 as there is a special end block in the way.
+		uint32* prev_block_footer = get_block_header((void*) sbrk_ret) - 2; // - 2 as there is a special end block in the way.
 
 		// Merge with previous block
 		if (!IS_ALLOCATED(*prev_block_footer)) {
@@ -360,7 +360,7 @@ void *alloc_block_BF(uint32 size)
 		 * Check if the current last block is free to merge before allocating.
 		 */
 
-		uint32* prev_block_footer = get_block_header(sbrk_ret) - 2; // - 2 as there is a special end block in the way.
+		uint32* prev_block_footer = get_block_header((void*) sbrk_ret) - 2; // - 2 as there is a special end block in the way.
 
 		// Merge with previous block
 		if (!IS_ALLOCATED(*prev_block_footer)) {

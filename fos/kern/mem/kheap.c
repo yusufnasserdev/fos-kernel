@@ -54,7 +54,7 @@ void* sbrk(int numOfPages)
 	 * 		or the break exceed the limit of the dynamic allocator. If sbrk fails, return -1
 	 */
 
-	//TODO: [PROJECT'24.MS2 - #02] [1] KERNEL HEAP - sbrk
+	//TODO: [PROJECT'24.MS2 - #02] [1] KERNEL HEAP - sbrk [DONE]
 
 	// This is not defined in the requirements, however, it's a corner case, the ACMer in me had to handle it.
 	if (numOfPages < 0) panic("KHeap SBRK: CANNOT ALLOCATE NEGATIVE NUM OF PAGES");
@@ -105,20 +105,25 @@ void kfree(void* virtual_address)
 
 unsigned int kheap_physical_address(unsigned int virtual_address)
 {
-	//TODO: [PROJECT'24.MS2 - #05] [1] KERNEL HEAP - kheap_physical_address
-	// Write your code here, remove the panic and write your code
-	panic("kheap_physical_address() is not implemented yet...!!");
+	//TODO: [PROJECT'24.MS2 - #05] [1] KERNEL HEAP - kheap_physical_address [DONE]
 
-	//return the physical address corresponding to given virtual_address
-	//refer to the project presentation and documentation for details
+	uint32 *page_table_address;
+	uint32 page_table_status = get_page_table(ptr_page_directory, virtual_address, &page_table_address);
 
-	//EFFICIENT IMPLEMENTATION ~O(1) IS REQUIRED ==================
+	if (page_table_status == TABLE_IN_MEMORY) {
+		uint32 page_table_entry = page_table_address[PTX(virtual_address)];
+		return EXTRACT_ADDRESS(page_table_entry) + PGOFF(virtual_address);
+	}
+
+	return 0;
 }
 
 unsigned int kheap_virtual_address(unsigned int physical_address)
 {
 	//TODO: [PROJECT'24.MS2 - #06] [1] KERNEL HEAP - kheap_virtual_address [DONE]
-	return to_frame_info(physical_address)->virtual_address;
+	if (PPN(physical_address) >= number_of_frames) return 0;
+
+	return frames_info[PPN(physical_address)].virtual_address;
 }
 //=================================================================================//
 //============================== BONUS FUNCTION ===================================//

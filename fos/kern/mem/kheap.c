@@ -39,6 +39,15 @@ int initialize_kheap_dynamic_allocator(uint32 daStart, uint32 initSizeToAllocate
 	// Dynamic Allocator manages the block allocation, hence initialized.
 	initialize_dynamic_allocator(kh_alloc_base, initSizeToAllocate);
 
+	// Page Allocation
+
+	// First and only free block, As this is the initializing point, so the whole heap is just one free block)
+	struct PageElement* alpha_page = (struct PageElement*)(kh_hard_cap + PAGE_SIZE);
+
+	// Initializing the freeBlocksList and adding the first free block to the list.
+	LIST_INIT(&khFreePagesList);
+	LIST_INSERT_HEAD(&khFreePagesList, alpha_page);
+
 	return 0;
 }
 
@@ -56,7 +65,7 @@ void* sbrk(int numOfPages)
 
 	//TODO: [PROJECT'24.MS2 - #02] [1] KERNEL HEAP - sbrk [DONE]
 
-	// This is not defined in the requirements, however, it's a corner case, the ACMer in me had to handle it.
+	// This is not defined in the requirements, however, it's a corner case, had to handle it.
 	if (numOfPages < 0) panic("KHeap SBRK: CANNOT ALLOCATE NEGATIVE NUM OF PAGES");
 	if (numOfPages == 0) return (void*) kh_soft_cap;
 
@@ -84,13 +93,39 @@ void* sbrk(int numOfPages)
 
 void* kmalloc(unsigned int size)
 {
-	//TODO: [PROJECT'24.MS2 - #03] [1] KERNEL HEAP - kmalloc
-	// Write your code here, remove the panic and write your code
-	kpanic_into_prompt("kmalloc() is not implemented yet...!!");
+	//TODO: [PROJECT'24.MS2 - #03] [1] KERNEL HEAP - kmalloc [DOING]
 
-	// use "isKHeapPlacementStrategyFIRSTFIT() ..." functions to check the current strategy
-
+	if (isKHeapPlacementStrategyFIRSTFIT()) {
+		return kmalloc_ff(size);
+	} else if (isKHeapPlacementStrategyBESTFIT()){
+		return kmalloc_bf(size);
+	} else {
+		panic("Placement strategy not implemented");
+	}
 }
+
+void* kmalloc_ff(unsigned int size) {
+	if (size <= DYN_ALLOC_MAX_BLOCK_SIZE) { // might need to subtract header & footer sizes.
+		return alloc_block_FF(size); // Already implemented and working
+	}
+
+	uint16 pages_requested_num = ROUNDUP(size, PAGE_SIZE) / PAGE_SIZE;
+
+
+
+
+	return NULL;
+}
+
+void* kmalloc_bf(unsigned int size) {
+	if (size <= DYN_ALLOC_MAX_BLOCK_SIZE) {
+		return alloc_block_BF(size); // Already implemented and working
+	} else { // Allocate page
+		return NULL;
+	}
+}
+
+
 
 void kfree(void* virtual_address)
 {

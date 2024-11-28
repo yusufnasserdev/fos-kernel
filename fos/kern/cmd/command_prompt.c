@@ -479,9 +479,6 @@ int is_subseq(char* sub, char* orig) {
 	return sub_len == found_chars;
 }
 
-
-
-
 /**
    Receives an array of arguments and the array's size.
    arguments[0] is guaranteed to be the intended command by the user

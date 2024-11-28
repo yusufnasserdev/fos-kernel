@@ -206,6 +206,64 @@ void set_block_data(void* va, uint32 totalSize, bool isAllocated)
 //=========================================
 // [3] ALLOCATE BLOCK BY FIRST FIT:
 //=========================================
+void* extend_cap(uint32 size, void* sbrk_ret) {
+	uint32 available_size = ROUNDUP(size, PAGE_SIZE);
+	struct BlockElement* new_block = NULL;
+
+	// Adding the special ending block to the new soft cap end.
+	uint32* new_end_block = (uint32*)(sbrk_ret + available_size - sizeof(int));
+	*new_end_block = 1;
+
+	/**
+	 * Check if the current last block is free to merge before allocating.
+	 */
+
+	uint32* prev_block_footer = (uint32*)sbrk_ret - 2; // - 2 as there is a special end block in the way.
+
+	// Merge with previous block
+	if (!IS_ALLOCATED(*prev_block_footer)) {
+		// Remove the block from the free blocks list.
+		new_block =
+				(struct BlockElement*)((uint32)prev_block_footer - (*prev_block_footer) + DYN_ALLOC_HEADER_FOOTER_SIZE);
+		LIST_REMOVE(&freeBlocksList, new_block);
+		available_size += (*prev_block_footer);
+
+		// Allocate in the new free area
+		set_block_data(new_block, size, DYN_ALLOC_ALLOCATED);
+
+		// Create a new free block with the remaining size and add it to the free list.
+		struct BlockElement* new_free_block =
+				(struct BlockElement*)((uint32)new_block + size);
+
+		set_block_data(new_free_block, available_size - size, DYN_ALLOC_FREE);
+
+		LIST_INSERT_TAIL(&freeBlocksList, new_free_block);
+
+
+	} else {
+		// The new block to be placed @ the start of the newly added space to the heap.
+		// The old special ending block will become the header for this block.
+		new_block = (struct BlockElement*)sbrk_ret;
+
+		// Check if it can be split to eliminate internal fragmentation.
+		if (is_splittable(available_size, size)) {
+			// Allocating the required block
+			set_block_data(new_block, size, DYN_ALLOC_ALLOCATED);
+
+			// Setup the new free block
+			struct BlockElement* new_free_block =
+					(struct BlockElement*)((uint32)new_block + size);
+			set_block_data(new_free_block, available_size - size, DYN_ALLOC_FREE);
+			LIST_INSERT_TAIL(&freeBlocksList, new_free_block);
+		}
+		else {
+			set_block_data(new_block, available_size, DYN_ALLOC_ALLOCATED);
+		}
+	}
+	return new_block;
+}
+
+
 void *alloc_block_FF(uint32 size)
 {
 	//==================================================================================
@@ -249,45 +307,11 @@ void *alloc_block_FF(uint32 size)
 		}
 	}
 
-	uint32 sbrk_ret = (uint32)sbrk(ROUNDUP(size, PAGE_SIZE)/PAGE_SIZE);
+	// If no suitable block found, request more memory
+	void* sbrk_ret = sbrk(ROUNDUP(size, PAGE_SIZE)/PAGE_SIZE);
 
-	if (sbrk_ret != -1) {
-		uint32 available_size = ROUNDUP(size, PAGE_SIZE);
-		struct BlockElement* new_block;
-
-		/**
-		 * Check if the current last block is free to merge before allocating.
-		 */
-
-		uint32* prev_block_footer = get_block_header((void*) sbrk_ret) - 2; // - 2 as there is a special end block in the way.
-
-		// Merge with previous block
-		if (!IS_ALLOCATED(*prev_block_footer)) {
-			// re-set the prev_block data to new size
-			uint32 block_new_size = available_size + (*prev_block_footer);
-			new_block = (void*)((uint32)prev_block_footer - (*prev_block_footer) + DYN_ALLOC_HEADER_FOOTER_SIZE);
-
-			// Re-setting the merged block data.
-			set_block_data(new_block, block_new_size, DYN_ALLOC_FREE);
-		} else {
-			// The new block to be placed @ the start of the newly added space to the heap.
-			// The old special ending block will become the header for this block.
-			new_block = (struct BlockElement*)sbrk_ret;
-
-			// Check if it can be split to eliminate internal fragmentation.
-			if (is_splittable(available_size, size)) {
-				split_free_block_and_allocate(new_block, size, available_size);
-			}
-			else {
-				allocate_free_block(new_block, available_size);
-			}
-
-		}
-
-		uint32* new_end_block = (uint32*)(sbrk_ret + available_size - sizeof(int)) ;
-		*new_end_block = 1;
-
-		return new_block;
+	if (sbrk_ret != (void*)-1) {
+		return extend_cap(size, sbrk_ret);
 	}
 
 	return NULL;
@@ -351,44 +375,10 @@ void *alloc_block_BF(uint32 size)
 	}
 
 	// If no suitable block found, request more memory
-	uint32 sbrk_ret = (uint32)sbrk(ROUNDUP(size, PAGE_SIZE)/PAGE_SIZE);
-	if (sbrk_ret != -1) {
-		uint32 available_size = ROUNDUP(size, PAGE_SIZE);
-		struct BlockElement* new_block;
+	void* sbrk_ret = sbrk(ROUNDUP(size, PAGE_SIZE)/PAGE_SIZE);
 
-		/**
-		 * Check if the current last block is free to merge before allocating.
-		 */
-
-		uint32* prev_block_footer = get_block_header((void*) sbrk_ret) - 2; // - 2 as there is a special end block in the way.
-
-		// Merge with previous block
-		if (!IS_ALLOCATED(*prev_block_footer)) {
-			// re-set the prev_block data to new size
-			uint32 block_new_size = available_size + (*prev_block_footer);
-			new_block = (void*)((uint32)prev_block_footer - (*prev_block_footer) + DYN_ALLOC_HEADER_FOOTER_SIZE);
-
-			// Re-setting the merged block data.
-			set_block_data(new_block, block_new_size, DYN_ALLOC_FREE);
-		} else {
-			// The new block to be placed @ the start of the newly added space to the heap.
-			// The old special ending block will become the header for this block.
-			new_block = (struct BlockElement*)sbrk_ret;
-
-			// Check if it can be split to eliminate internal fragmentation.
-			if (is_splittable(available_size, size)) {
-				split_free_block_and_allocate(new_block, size, available_size);
-			}
-			else {
-				allocate_free_block(new_block, available_size);
-			}
-
-		}
-
-		uint32* new_end_block = (uint32*)(sbrk_ret + available_size - sizeof(int)) ;
-		*new_end_block = 1;
-
-		return new_block;
+	if (sbrk_ret != (void*)-1) {
+		return extend_cap(size, sbrk_ret);
 	}
 
 	return NULL;
@@ -483,7 +473,7 @@ __inline__ uint8 can_extend_in_place(void* block, uint32 current_size, uint32 de
 	return !IS_ALLOCATED(next_header) && next_header + current_size >= desired_size;
 }
 
-// Splits a block and add frees the remaining part
+// Splits a block and frees the remaining part
 void split_block(void* block, uint32 total_size, uint32 requested_size) {
 	set_block_data(block, requested_size, DYN_ALLOC_ALLOCATED);
 

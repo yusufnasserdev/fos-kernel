@@ -6,6 +6,7 @@
 #endif
 
 #include <inc/types.h>
+#include <inc/queue.h>
 
 
 /*2017*/
@@ -35,10 +36,27 @@ void* kmalloc(unsigned int size);
 void kfree(void* virtual_address);
 void *krealloc(void *virtual_address, unsigned int new_size);
 
+/* Added Helpers */
+void* kmalloc_ff(unsigned int size);
+void* kmalloc_bf(unsigned int size);
+
 unsigned int kheap_virtual_address(unsigned int physical_address);
 unsigned int kheap_physical_address(unsigned int virtual_address);
 
-int numOfKheapVACalls ;
+int numOfKheapVACalls;
+
+//=============================================================================
+struct PageElement
+{
+	LIST_ENTRY(PageElement) prev_next_info;	/* linked list links */
+
+	uint16 pages_count;
+	uint32 start_addr;
+};
+
+LIST_HEAD(MemPage_LIST, PageElement);
+struct MemPage_LIST khFreePagesList;
+//=============================================================================
 
 
 //TODO: [PROJECT'24.MS2 - #01] [1] KERNEL HEAP - add suitable code here [DONE]

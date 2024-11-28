@@ -40,7 +40,7 @@ struct BlockElement
 };// __attribute__((packed))
 
 LIST_HEAD(MemBlock_LIST, BlockElement);
-struct MemBlock_LIST freeBlocksList ;
+struct MemBlock_LIST freeBlocksList;
 //=============================================================================
 
 /*Functions*/
@@ -72,5 +72,8 @@ void *alloc_block_WF(uint32 size);
 void *alloc_block_NF(uint32 size);
 void free_block(void* va);
 void *realloc_block_FF(void* va, uint32 new_size);
+
+/* Added Helpers */
+void* extend_cap(uint32 size, void* sbrk_ret);
 
 #endif

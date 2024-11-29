@@ -4,6 +4,39 @@
 #include <inc/dynamic_allocator.h>
 #include "memory_manager.h"
 
+
+
+/**
+ * Tracks meta-data for the pages status
+ *
+ * Page entries UN-allocated UN-mapped: 0
+ * Page entries used for block allocation: -1
+ * Page entries used for page allocation: holds number of allocated pages.
+ */
+
+int32 kh_pgs_status[NUM_OF_KHEAP_PAGES];
+uint8 status_init = 0;
+
+__inline__ uint32 get_page_idx(uint32 virtual_address) {
+	return ((virtual_address - KERNEL_HEAP_START) / PAGE_SIZE);
+}
+
+void init_status_arr() {
+	memset(kh_pgs_status, 0, sizeof(kh_pgs_status));
+	status_init = 1;
+}
+
+int8 allocate_map_track_page(uint32 virt_add, uint16 status) {
+	struct FrameInfo *new_frame = NULL;
+	allocate_frame(&new_frame);
+	if (new_frame == NULL) return E_NO_MEM;
+	map_frame(ptr_page_directory, new_frame, virt_add, PERM_WRITEABLE);
+	new_frame->virtual_address = virt_add;
+	kh_pgs_status[get_page_idx(virt_add)] = status;
+	return 0;
+}
+
+
 //Initialize the dynamic allocator of kernel heap with the given start address, size & limit
 //All pages in the given range should be allocated
 //Remember: call the initialize_dynamic_allocator(..) to complete the initialization
@@ -16,28 +49,26 @@ int initialize_kheap_dynamic_allocator(uint32 daStart, uint32 initSizeToAllocate
 
 	// Initialize tracking variables
 	kh_soft_cap = kh_alloc_base = ROUNDDOWN(daStart, PAGE_SIZE); // ensuring that they align with first page boundary.
-	kh_hard_cap = daLimit;
+	kh_hard_cap = ROUNDUP(daLimit, PAGE_SIZE);
+	kh_pages_start = kh_hard_cap + PAGE_SIZE;
+
 
 	initSizeToAllocate = ROUNDUP(initSizeToAllocate, PAGE_SIZE); // Aligning the requested size to a page boundary
-
 	// Initial size exceeds the given limit
 	if (daStart + initSizeToAllocate > daLimit) {
 		panic("INIT KHEAP DYNAMIC ALLOCATOR FAILED: Initial size exceeds the given limit\n");
 	}
-
 	kh_soft_cap += initSizeToAllocate; // Extending the soft cap to the requested size as it's ensured to be feasible with the given limit.
 
+
+	if (!status_init) init_status_arr(); // initialize page allocation tracking, if not initialized.
 	// Allocate the pages in the given range and map them.
-	for (uint32 i = kh_alloc_base; i < kh_soft_cap; i+=PAGE_SIZE) {
-		struct FrameInfo* new_frame;
-		allocate_frame(&new_frame); // Panics if no memory available
-		map_frame(ptr_page_directory, new_frame, i, PERM_WRITEABLE);
-		new_frame->virtual_address = i;
+	for (uint32 iter = kh_alloc_base; iter < kh_soft_cap; iter += PAGE_SIZE) {
+		allocate_map_track_page(iter, -1);
 	}
 
 	// Dynamic Allocator manages the block allocation, hence initialized.
 	initialize_dynamic_allocator(kh_alloc_base, initSizeToAllocate);
-	// cprintf("h9\n");
 	return 0;
 }
 
@@ -65,11 +96,8 @@ void* sbrk(int numOfPages)
 		kh_soft_cap += (numOfPages * PAGE_SIZE);
 
 		// allocate and map
-		for (uint32 i = new_start; i < kh_soft_cap; i+=PAGE_SIZE) {
-			struct FrameInfo* new_frame;
-			allocate_frame(&new_frame); // Panics if no memory available
-			map_frame(ptr_page_directory, new_frame, i, PERM_WRITEABLE);
-			new_frame->virtual_address = i;
+		for (uint32 iter = new_start; iter < kh_soft_cap; iter+=PAGE_SIZE) {
+			allocate_map_track_page(iter, -1);
 		}
 
 		// return start of allocated space
@@ -81,17 +109,11 @@ void* sbrk(int numOfPages)
 
 //TODO: [PROJECT'24.MS2 - BONUS#2] [1] KERNEL HEAP - Fast Page Allocator
 
-/**
- * Holds meta-data for the allocated pages or 0 for free ones.
- *
- * Page entries where chunk allocation starts, holds allocation full size
- * Page entries inside chunk allocation, holds reference to the start allocation entry.
- */
-uint32 is_allocated[MAX_ENTRIES][MAX_ENTRIES] = {0};
-
 void* kmalloc(unsigned int size)
 {
-	//TODO: [PROJECT'24.MS2 - #03] [1] KERNEL HEAP - kmalloc [DOING]
+	//TODO: [PROJECT'24.MS2 - #03] [1] KERNEL HEAP - kmalloc [DONE]
+
+	if (!status_init) init_status_arr();
 
 	if (isKHeapPlacementStrategyFIRSTFIT()) {
 		return kmalloc_ff(size);
@@ -112,8 +134,8 @@ void* kmalloc_ff(unsigned int size) {
 	void* alloc_start_addr = NULL;
 
 	// Iterate through the KHEAP pages space for enough consecutive free pages.
-	for (uint32 iter = KH_PG_ALLOC_START; iter < KERNEL_HEAP_MAX; iter += PAGE_SIZE) {
-		if (!is_allocated[PDX(iter)][PTX(iter)]) {
+	for (uint32 iter = kh_pages_start; iter < KERNEL_HEAP_MAX; iter += PAGE_SIZE) {
+		if (!kh_pgs_status[get_page_idx(iter)]) {
 			if (alloc_start_addr == NULL) alloc_start_addr = (void*) iter; // Assign address if it was at start
 			curr_consecutive_pgs++;
 			if (curr_consecutive_pgs == pages_requested_num) break;
@@ -126,18 +148,11 @@ void* kmalloc_ff(unsigned int size) {
 	if (curr_consecutive_pgs == pages_requested_num) {
 		for (uint32 iter = (uint32)alloc_start_addr;
 				iter < KERNEL_HEAP_MAX && pages_requested_num > 0; iter += PAGE_SIZE) {
-
-			struct FrameInfo* new_frame;
-			allocate_frame(&new_frame);
-			map_frame(ptr_page_directory, new_frame, iter, PERM_WRITEABLE);
-
-			// Add full allocation base address to is_allocated as meta-data to be used when freeing.
-			is_allocated[PDX(iter)][PTX(iter)] = (uint32)alloc_start_addr;
+			allocate_map_track_page(iter, curr_consecutive_pgs);
 			--pages_requested_num;
 		}
 
-		// Add full allocation size to is_allocated as meta-data to be used when freeing.
-		is_allocated[PDX(alloc_start_addr)][PTX(alloc_start_addr)] = ROUNDUP(size, PAGE_SIZE);
+		// Add number of pages allocated to is_allocated as meta-data to be used when freeing.
 		return alloc_start_addr;
 	}
 
@@ -146,44 +161,58 @@ void* kmalloc_ff(unsigned int size) {
 
 void* kmalloc_bf(unsigned int size) {
 	if (size <= DYN_ALLOC_MAX_BLOCK_SIZE) {
-		return alloc_block_BF(size); // Already implemented and working
+		return alloc_block_BF(size);
 	} else { // Allocate page
 		return NULL;
 	}
 }
 
+void unmap_untrack_page(uint32 virt_add) {
+	kh_pgs_status[get_page_idx(virt_add)] = 0;
+	unmap_frame(ptr_page_directory,virt_add);
+}
+
 void kfree(void* virtual_address)
 {
-	//TODO: [PROJECT'24.MS2 - #04] [1] KERNEL HEAP - kfree
-	// Write your code here, remove the panic and write your code
-	panic("kfree() is not implemented yet...!!");
+	//TODO: [PROJECT'24.MS2 - #04] [1] KERNEL HEAP - kfree [DONE]
+	if (!isKHeapPlacementStrategyFIRSTFIT()) panic("ME NO CAN DO, only ff implemented for free\n");
 
-	//you need to get the size of the given allocation using its address
-	//refer to the project presentation and documentation for details
+	uint32 casted_address = (uint32)virtual_address; // casting the address to be comparable, instead of casting multiple times.
 
+	if (casted_address >= kh_alloc_base && casted_address < kh_soft_cap) { // Block allocation range
+		free_block(virtual_address);
+		return;
+	}
+
+	if (casted_address >= kh_pages_start && casted_address < KERNEL_HEAP_MAX) { // Page allocation range
+		uint32 pages_free_cnt = kh_pgs_status[get_page_idx(casted_address)];
+		while (pages_free_cnt--) {
+			unmap_untrack_page(casted_address);
+			casted_address += PAGE_SIZE;
+		}
+		return;
+	}
+
+	panic("KFREE: INVALID ADDRESS\n");
 }
 
 unsigned int kheap_physical_address(unsigned int virtual_address)
 {
 	//TODO: [PROJECT'24.MS2 - #05] [1] KERNEL HEAP - kheap_physical_address [DONE]
+	uint32 *dummy_ptr_page_table; // breaks if null used, so a dummy used.
+	struct FrameInfo* frame_info_address = get_frame_info(ptr_page_directory, virtual_address, &dummy_ptr_page_table);
 
-	uint32 *page_table_address;
-	uint32 page_table_status = get_page_table(ptr_page_directory, virtual_address, &page_table_address);
-
-	if (page_table_status == TABLE_IN_MEMORY) {
-		uint32 page_table_entry = page_table_address[PTX(virtual_address)];
-		return EXTRACT_ADDRESS(page_table_entry) + PGOFF(virtual_address);
-	}
-
-	return 0;
+	if (frame_info_address == NULL) return 0; // Invalid address or not mapped.
+	return to_physical_address(frame_info_address) | PGOFF(virtual_address);
 }
 
 unsigned int kheap_virtual_address(unsigned int physical_address)
 {
 	//TODO: [PROJECT'24.MS2 - #06] [1] KERNEL HEAP - kheap_virtual_address [DONE]
-	if (PPN(physical_address) >= number_of_frames) return 0;
+	struct FrameInfo* check_frame = to_frame_info(physical_address);
+	if (!check_frame->references) return 0; // to check if invalid address after using kfree.
 
-	return frames_info[PPN(physical_address)].virtual_address;
+	return frames_info[PPN(physical_address)].virtual_address | PGOFF(physical_address);
 }
 //=================================================================================//
 //============================== BONUS FUNCTION ===================================//

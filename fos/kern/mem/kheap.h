@@ -46,14 +46,12 @@ int numOfKheapVACalls;
 uint32 kh_alloc_base;	// Kernel heap base address
 uint32 kh_soft_cap;		// Kernel heap segment break, 'soft' cap as it can be extended
 uint32 kh_hard_cap;		// Kernel heap block allocation end, 'hard' cap as it CANNOT be breached.
+uint32 kh_pages_start;
 
 /* Added Helpers */
 void* kmalloc_ff(unsigned int size);
 void* kmalloc_bf(unsigned int size);
-
-/* Added MACROs*/
-#define KH_PG_ALLOC_START (kh_hard_cap + PAGE_SIZE)
-#define MAX_ENTRIES 1024
+void free_page(void* virtual_address);
 
 
 #endif // FOS_KERN_KHEAP_H_

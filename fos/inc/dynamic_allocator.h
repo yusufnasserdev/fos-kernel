@@ -15,6 +15,7 @@
 /*Flags*/
 #define DYN_ALLOC_FREE 0
 #define DYN_ALLOC_ALLOCATED 1
+#define SBRK_FAIL ((void*) -1)
 
 
 /*Implementation Type of List*/

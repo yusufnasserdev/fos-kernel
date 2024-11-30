@@ -4,7 +4,7 @@
 #include <inc/dynamic_allocator.h>
 #include "memory_manager.h"
 
-
+#define NO_FRAMES -4
 
 /**
  * Tracks meta-data for the pages status
@@ -15,22 +15,18 @@
  */
 
 int32 kh_pgs_status[NUM_OF_KHEAP_PAGES];
-uint8 status_init = 0;
 
 __inline__ uint32 get_page_idx(uint32 virtual_address) {
 	return ((virtual_address - KERNEL_HEAP_START) / PAGE_SIZE);
 }
 
-void init_status_arr() {
-	memset(kh_pgs_status, 0, sizeof(kh_pgs_status));
-	status_init = 1;
-}
-
 int8 allocate_map_track_page(uint32 virt_add, uint16 status) {
 	struct FrameInfo *new_frame = NULL;
 	allocate_frame(&new_frame);
-	if (new_frame == NULL) return E_NO_MEM;
+
+	if (new_frame == NULL) return NO_FRAMES;
 	map_frame(ptr_page_directory, new_frame, virt_add, PERM_WRITEABLE);
+
 	new_frame->virtual_address = virt_add;
 	kh_pgs_status[get_page_idx(virt_add)] = status;
 	return 0;
@@ -60,8 +56,9 @@ int initialize_kheap_dynamic_allocator(uint32 daStart, uint32 initSizeToAllocate
 	}
 	kh_soft_cap += initSizeToAllocate; // Extending the soft cap to the requested size as it's ensured to be feasible with the given limit.
 
+	// initialize page allocation tracking array to zeros.
+	memset(kh_pgs_status, 0, sizeof(kh_pgs_status));
 
-	if (!status_init) init_status_arr(); // initialize page allocation tracking, if not initialized.
 	// Allocate the pages in the given range and map them.
 	for (uint32 iter = kh_alloc_base; iter < kh_soft_cap; iter += PAGE_SIZE) {
 		allocate_map_track_page(iter, -1);
@@ -104,7 +101,7 @@ void* sbrk(int numOfPages)
 		return (void*) new_start;
 	}
 
-	return (void*)-1 ;
+	return SBRK_FAIL;
 }
 
 //TODO: [PROJECT'24.MS2 - BONUS#2] [1] KERNEL HEAP - Fast Page Allocator
@@ -112,8 +109,6 @@ void* sbrk(int numOfPages)
 void* kmalloc(unsigned int size)
 {
 	//TODO: [PROJECT'24.MS2 - #03] [1] KERNEL HEAP - kmalloc [DONE]
-
-	if (!status_init) init_status_arr();
 
 	if (isKHeapPlacementStrategyFIRSTFIT()) {
 		return kmalloc_ff(size);
@@ -169,7 +164,7 @@ void* kmalloc_bf(unsigned int size) {
 
 void unmap_untrack_page(uint32 virt_add) {
 	kh_pgs_status[get_page_idx(virt_add)] = 0;
-	unmap_frame(ptr_page_directory,virt_add);
+	unmap_frame(ptr_page_directory, virt_add);
 }
 
 void kfree(void* virtual_address)
@@ -203,6 +198,8 @@ unsigned int kheap_physical_address(unsigned int virtual_address)
 	struct FrameInfo* frame_info_address = get_frame_info(ptr_page_directory, virtual_address, &dummy_ptr_page_table);
 
 	if (frame_info_address == NULL) return 0; // Invalid address or not mapped.
+
+	// Frame physical address ORed with the offset from the passed virtual address
 	return to_physical_address(frame_info_address) | PGOFF(virtual_address);
 }
 
@@ -212,6 +209,7 @@ unsigned int kheap_virtual_address(unsigned int physical_address)
 	struct FrameInfo* check_frame = to_frame_info(physical_address);
 	if (!check_frame->references) return 0; // to check if invalid address after using kfree.
 
+	// Frame mapped virtual address ORed with the offset from the passed physical address
 	return frames_info[PPN(physical_address)].virtual_address | PGOFF(physical_address);
 }
 //=================================================================================//

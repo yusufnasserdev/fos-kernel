@@ -148,9 +148,30 @@ void fault_handler(struct Trapframe *tf)
 		if (userTrap)
 		{
 			/*============================================================================================*/
-			//TODO: [PROJECT'24.MS2 - #08] [2] FAULT HANDLER I - Check for invalid pointers
+			//TODO: [PROJECT'24.MS2 - #08] [2] FAULT HANDLER I - Check for invalid pointers [DONE]
 			//(e.g. pointing to unmarked user heap page, kernel or wrong access rights),
 			//your code is here
+
+			//			cprintf("\nUser Trap\n");
+
+			// Accessing Kernel Memory
+			if (fault_va >= KERNEL_BASE && fault_va <= KERNEL_HEAP_MAX) {
+				//				cprintf("\npointing to kernel\n");
+				env_exit();
+			}
+
+			int pg_perms = pt_get_page_permissions(faulted_env->env_page_directory, fault_va);
+			// Address in user heap BUT Unmarked User Heap Page
+			if (fault_va >= USER_HEAP_START && fault_va < USER_HEAP_MAX && !(pg_perms & PERM_USER)) {
+				//				cprintf("\nNot marked as user\n");
+				env_exit();
+			}
+
+			// Read-Only Page Violation
+			if ((pg_perms & PERM_PRESENT) && (pg_perms & ~PERM_WRITEABLE)) {
+				//				cprintf("\nread only\n");
+				env_exit();
+			}
 
 			/*============================================================================================*/
 		}
@@ -215,19 +236,40 @@ void table_fault_handler(struct Env * curenv, uint32 fault_va)
 void page_fault_handler(struct Env * faulted_env, uint32 fault_va)
 {
 #if USE_KHEAP
-		struct WorkingSetElement *victimWSElement = NULL;
-		uint32 wsSize = LIST_SIZE(&(faulted_env->page_WS_list));
+	struct WorkingSetElement *victimWSElement = NULL;
+	uint32 wsSize = LIST_SIZE(&(faulted_env->page_WS_list));
 #else
-		int iWS =faulted_env->page_last_WS_index;
-		uint32 wsSize = env_page_ws_get_size(faulted_env);
+	int iWS =faulted_env->page_last_WS_index;
+	uint32 wsSize = env_page_ws_get_size(faulted_env);
 #endif
 
 	if(wsSize < (faulted_env->page_WS_max_size))
 	{
 		//cprintf("PLACEMENT=========================WS Size = %d\n", wsSize );
-		//TODO: [PROJECT'24.MS2 - #09] [2] FAULT HANDLER I - Placement
+		//TODO: [PROJECT'24.MS2 - #09] [2] FAULT HANDLER I - Placement [DONE]
 		// Write your code here, remove the panic and write your code
-		panic("page_fault_handler().PLACEMENT is not implemented yet...!!");
+		//		panic("page_fault_handler().PLACEMENT is not implemented yet...!!");
+
+		if (faulted_env == NULL) panic("page_fault_handler: Invalid environment pointer\n");
+
+
+		struct FrameInfo* faulted_pg_frame = NULL;
+		allocate_frame(&faulted_pg_frame);
+		map_frame(faulted_env->env_page_directory, faulted_pg_frame, fault_va, PERM_WRITEABLE | PERM_USER);
+
+		if (pf_read_env_page(faulted_env, (void *) fault_va) != 0) {
+			if (!(fault_va >= USER_HEAP_START && fault_va < USER_HEAP_MAX)
+					&& !(fault_va >= USTACKBOTTOM && fault_va < USTACKTOP)) {
+				env_exit();
+			}
+		}
+
+		struct WorkingSetElement *new_ws_element = env_page_ws_list_create_element(faulted_env, fault_va);
+		LIST_INSERT_TAIL(&faulted_env->page_WS_list, new_ws_element);
+
+		if (LIST_SIZE(&(faulted_env->page_WS_list)) == faulted_env->page_WS_max_size)
+			faulted_env->page_last_WS_element = LIST_FIRST(&faulted_env->page_WS_list);
+		else faulted_env->page_last_WS_element = NULL;
 
 		//refer to the project presentation and documentation for details
 	}

@@ -310,7 +310,7 @@ void *alloc_block_FF(uint32 size)
 	// If no suitable block found, request more memory
 	void* sbrk_ret = sbrk(ROUNDUP(size, PAGE_SIZE)/PAGE_SIZE);
 
-	if (sbrk_ret != (void*)-1) {
+	if (sbrk_ret != SBRK_FAIL) {
 		return extend_cap(size, sbrk_ret);
 	}
 
@@ -377,7 +377,7 @@ void *alloc_block_BF(uint32 size)
 	// If no suitable block found, request more memory
 	void* sbrk_ret = sbrk(ROUNDUP(size, PAGE_SIZE)/PAGE_SIZE);
 
-	if (sbrk_ret != (void*)-1) {
+	if (sbrk_ret != SBRK_FAIL) {
 		return extend_cap(size, sbrk_ret);
 	}
 

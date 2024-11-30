@@ -219,8 +219,9 @@ void free_frame(struct FrameInfo *ptr_frame_info)
 //
 void decrement_references(struct FrameInfo* ptr_frame_info)
 {
-	if (--(ptr_frame_info->references) == 0)
+	if (--(ptr_frame_info->references) == 0) {
 		free_frame(ptr_frame_info);
+	}
 }
 
 //

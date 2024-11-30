@@ -16,13 +16,26 @@
 
 inline struct WorkingSetElement* env_page_ws_list_create_element(struct Env* e, uint32 virtual_address)
 {
-	//TODO: [PROJECT'24.MS2 - #07] [2] FAULT HANDLER I - Create a new WS element
+	//TODO: [PROJECT'24.MS2 - #07] [2] FAULT HANDLER I - Create a new WS element [DONE]
 	//If failed to create a new one, kernel should panic()!
 	//COMMENT THE FOLLOWING LINE BEFORE START CODING
-	panic("env_page_ws_list_create_element is not implemented yet");
+	//panic("env_page_ws_list_create_element is not implemented yet");
 	//Your Code is Here...
+	if (e == NULL) panic("env_page_ws_list_create_element:: Invalid environment pointer\n");
+	if ((void *) virtual_address == NULL) panic("env_page_ws_list_create_element:: Invalid virtual address for the working set\n");
+//	if (e->page_last_WS_element != NULL) panic("env_page_ws_list_create_element:: env WS list is FULL\n");
 
+	struct WorkingSetElement* new_ws_element = (struct WorkingSetElement*) kmalloc(sizeof(struct WorkingSetElement));
+	if (new_ws_element == NULL) panic("env_page_ws_list_create_element:: kmalloc failed allocation\n");
+
+	new_ws_element->virtual_address = virtual_address;
+//	LIST_INSERT_TAIL(&(e->page_WS_list), new_ws_element);
+
+	// If list is full, set the page_last_WS_element to the recently inserted WS element.
+//	if (LIST_SIZE(&(e->page_WS_list)) == e->page_WS_max_size) e->page_last_WS_element = new_ws_element;
+	return new_ws_element;
 }
+
 inline void env_page_ws_invalidate(struct Env* e, uint32 virtual_address)
 {
 	if (isPageReplacmentAlgorithmLRU(PG_REP_LRU_LISTS_APPROX))

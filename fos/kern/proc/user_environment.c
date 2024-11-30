@@ -421,8 +421,8 @@ struct Env* env_create(char* user_program_name, unsigned int page_WS_size, unsig
 
 	//[13] Print the initial working set [for debugging]
 	{
-//		cprintf("Page working set after loading the program...\n");
-//		env_page_ws_print(e);
+		//		cprintf("Page working set after loading the program...\n");
+		//		env_page_ws_print(e);
 
 		//	cprintf("Table working set after loading the program...\n");
 		//	env_table_ws_print(e);
@@ -865,15 +865,22 @@ uint32 __cur_k_stk = KERNEL_HEAP_START;
 void* create_user_kern_stack(uint32* ptr_user_page_directory)
 {
 #if USE_KHEAP
-	//TODO: [PROJECT'24.MS2 - #07] [2] FAULT HANDLER I - create_user_kern_stack
+	//TODO: [PROJECT'24.MS2 - #07] [2] FAULT HANDLER I - create_user_kern_stack [DONE]
 	// Write your code here, remove the panic and write your code
-	panic("create_user_kern_stack() is not implemented yet...!!");
+//	panic("create_user_kern_stack() is not implemented yet...!!");
 
 	//allocate space for the user kernel stack.
 	//remember to leave its bottom page as a GUARD PAGE (i.e. not mapped)
 	//return a pointer to the start of the allocated space (including the GUARD PAGE)
 	//On failure: panic
 
+	if (ptr_user_page_directory == NULL) panic("create_user_kern_stack:: Invalid ptr_user_page_directory\n");
+
+	void* usr_kern_stack_start = kmalloc(KERNEL_STACK_SIZE);
+	if (usr_kern_stack_start == NULL) panic("create_user_kern_stack:: kmalloc failed allocation\n");
+
+	pt_set_page_permissions(ptr_user_page_directory, (uint32) usr_kern_stack_start, PERM_WRITEABLE, PERM_PRESENT);
+	return usr_kern_stack_start;
 
 #else
 	if (KERNEL_HEAP_MAX - __cur_k_stk < KERNEL_STACK_SIZE)
@@ -881,7 +888,7 @@ void* create_user_kern_stack(uint32* ptr_user_page_directory)
 	void* kstack = (void*) __cur_k_stk;
 	__cur_k_stk += KERNEL_STACK_SIZE;
 	return kstack ;
-//	panic("KERNEL HEAP is OFF! user kernel stack is not supported");
+	//	panic("KERNEL HEAP is OFF! user kernel stack is not supported");
 #endif
 }
 
@@ -1194,7 +1201,7 @@ void cleanup_buffers(struct Env* e)
 	acquire_spinlock(&MemFrameLists.mfllock);
 	{
 		LIST_FOREACH(ptr_fi, &MemFrameLists.modified_frame_list)
-		{
+				{
 			if(ptr_fi->proc == e)
 			{
 				pt_clear_page_table_entry(ptr_fi->proc->env_page_directory,ptr_fi->bufferedVA);
@@ -1208,7 +1215,7 @@ void cleanup_buffers(struct Env* e)
 				//cprintf("[%s] ptr_fi = %x, ptr_fi next = %x, saved next = %x \n", curenv->prog_name ,ptr_fi, LIST_NEXT(ptr_fi), ___ptr_next);
 				//cprintf("==================\n");
 			}
-		}
+				}
 	}
 	release_spinlock(&MemFrameLists.mfllock);
 

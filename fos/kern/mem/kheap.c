@@ -147,7 +147,6 @@ void* kmalloc_ff(unsigned int size) {
 			--pages_requested_num;
 		}
 
-		// Add number of pages allocated to is_allocated as meta-data to be used when freeing.
 		return alloc_start_addr;
 	}
 

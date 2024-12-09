@@ -272,7 +272,7 @@ void *alloc_block_FF(uint32 size)
 	{
 		if (size % 2 != 0) size++;	//ensure that the size is even (to use LSB as allocation flag)
 		if (size < DYN_ALLOC_MIN_BLOCK_SIZE)
-			size = DYN_ALLOC_MIN_BLOCK_SIZE ;
+			size = DYN_ALLOC_MIN_BLOCK_SIZE;
 		if (!is_initialized)
 		{
 			uint32 required_size = size + 2*sizeof(int) /*header & footer*/ + 2*sizeof(int) /*da begin & end*/ ;
@@ -293,6 +293,7 @@ void *alloc_block_FF(uint32 size)
 	struct BlockElement* iterator_block;
 
 	LIST_FOREACH(iterator_block, &freeBlocksList) {
+//		cprintf("\nLIST_FOREACH(iterator_block, &freeBlocksList)\n");
 		uint32 blk_size = get_block_size(iterator_block);
 		if (blk_size >= size) {
 			// Check if it can be split to eliminate internal fragmentation.
@@ -303,12 +304,15 @@ void *alloc_block_FF(uint32 size)
 				allocate_free_block(iterator_block, blk_size);
 			}
 
+//			cprintf("\nGOT A MATCH\n");
 			return iterator_block;
 		}
 	}
 
 	// If no suitable block found, request more memory
+//	cprintf("\nNo suitable block found\n");
 	void* sbrk_ret = sbrk(ROUNDUP(size, PAGE_SIZE)/PAGE_SIZE);
+//	cprintf("\nSbrk_ret: %x\n", sbrk_ret);
 
 	if (sbrk_ret != SBRK_FAIL) {
 		return extend_cap(size, sbrk_ret);

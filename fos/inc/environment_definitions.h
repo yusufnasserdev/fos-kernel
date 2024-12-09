@@ -120,7 +120,12 @@ struct Env {
 									//Its first page is ALWAYS used as a GUARD PAGE (i.e. unmapped)
 
 	//=======================================================================
-	//TODO: [PROJECT'24.MS2 - #10] [3] USER HEAP - add suitable code here
+	//TODO: [PROJECT'24.MS2 - #10] [3] USER HEAP - add suitable code here [DONE]
+
+	uint32 uh_alloc_base;	// User heap base address
+	uint32 uh_soft_cap;		// User heap segment break, 'soft' cap as it can be extended
+	uint32 uh_hard_cap;		// User heap block allocation end, 'hard' cap as it CANNOT be breached.
+	uint32 uh_pages_start;  // User heap page allocation start.
 
 	//=======================================================================
 	//for page file management

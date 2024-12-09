@@ -45,8 +45,8 @@ void* malloc_ff(unsigned int size) {
 	}
 
 	size = ROUNDUP(size, PAGE_SIZE);
-	uint16 pages_requested_num = size / PAGE_SIZE;
-	uint16 curr_consecutive_pgs = 0;
+	uint32 pages_requested_num = size / PAGE_SIZE;
+	uint32 curr_consecutive_pgs = 0;
 
 	if (uh_pgs_init == 0) {
 		memset(uh_pgs_status, 0, sizeof(uh_pgs_status));
@@ -55,7 +55,6 @@ void* malloc_ff(unsigned int size) {
 
 	// Iterate through the UHEAP pages space for enough consecutive free pages.
 	for (uint32 iter = myEnv->uh_pages_start; iter < USER_HEAP_MAX; iter += PAGE_SIZE) {
-
 		if (uh_pgs_status[iter/PAGE_SIZE]) {
 			// Resets consecutive pages tracking
 			curr_consecutive_pgs = 0;
@@ -94,9 +93,24 @@ void* malloc_bf(unsigned int size) {
 //=================================
 void free(void* virtual_address)
 {
-	//TODO: [PROJECT'24.MS2 - #14] [3] USER HEAP [USER SIDE] - free()
-	// Write your code here, remove the panic and write your code
-	panic("free() is not implemented yet...!!");
+	//TODO: [PROJECT'24.MS2 - #14] [3] USER HEAP [USER SIDE] - free() [DOING]
+	if (!sys_isUHeapPlacementStrategyFIRSTFIT()) panic("ME NO CAN DO, only ff implemented for UH free\n");
+
+	uint32 casted_address = (uint32)virtual_address; // casting the address to be comparable, instead of casting multiple times.
+
+	if (casted_address >= myEnv->uh_alloc_base && casted_address < myEnv->uh_soft_cap) { // Block allocation range
+		free_block(virtual_address);
+		return;
+	}
+
+	if (casted_address >= myEnv->uh_pages_start && casted_address < USER_HEAP_MAX) { // Page allocation range
+		uint32 freed_size = uh_pgs_status[casted_address/PAGE_SIZE] * PAGE_SIZE;
+		uh_pgs_status[casted_address/PAGE_SIZE] = 0;
+		sys_free_user_mem(casted_address, freed_size);
+		return;
+	}
+
+	panic("KFREE: INVALID ADDRESS\n");
 }
 
 

@@ -162,17 +162,22 @@ void* sys_sbrk(int numOfPages)
 //=====================================
 // 1) ALLOCATE USER MEMORY:
 //=====================================
+void mark_page(uint32* pg_table, uint32 virtual_address) {
+	pg_table[PTX(virtual_address)] |= NO_PERM_MARKED | PERM_USER | PERM_WRITEABLE;
+}
+
 void allocate_user_mem(struct Env* e, uint32 virtual_address, uint32 size)
 {
-	/*====================================*/
-	/*Remove this line before start coding*/
-//	inctst();
-//	return;
-	/*====================================*/
+	//TODO: [PROJECT'24.MS2 - #13] [3] USER HEAP [KERNEL SIDE] - allocate_user_mem() [DONE]
 
-	//TODO: [PROJECT'24.MS2 - #13] [3] USER HEAP [KERNEL SIDE] - allocate_user_mem()
-	// Write your code here, remove the panic and write your code
-	panic("allocate_user_mem() is not implemented yet...!!");
+	for (uint32 iter = virtual_address, limit = virtual_address + size; iter < limit; iter += PAGE_SIZE) {
+		uint32* pg_table = NULL;
+		get_page_table(e->env_page_directory, iter, &pg_table);
+
+		if (pg_table == NULL) pg_table = create_page_table(e->env_page_directory, iter);
+
+		mark_page(pg_table, iter);
+	}
 }
 
 //=====================================

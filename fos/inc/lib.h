@@ -110,6 +110,12 @@ int 	sys_check_WS_list(uint32* WS_list_content, int actual_WS_list_size, uint32 
 //2024
 void 	sys_utilities(char* utilityName, int value);
 
+//2024 HELPERS
+#define GIGA (1 << 30)
+
+// Done like this instead of (1 << 32) to avoid integer overflow.
+#define ADDRESS_SPACE_PAGES GIGA / PAGE_SIZE * 4
+
 /* concurrency.c */
 void env_sleep(uint32 apprxMilliSeconds);
 uint32 busy_wait(uint32 loopMax);

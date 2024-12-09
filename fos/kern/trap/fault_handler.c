@@ -162,7 +162,7 @@ void fault_handler(struct Trapframe *tf)
 
 			int pg_perms = pt_get_page_permissions(faulted_env->env_page_directory, fault_va);
 			// Address in user heap BUT Unmarked User Heap Page
-			if (fault_va >= USER_HEAP_START && fault_va < USER_HEAP_MAX && !(pg_perms & PERM_USER)) {
+			if (fault_va >= USER_HEAP_START && fault_va < USER_HEAP_MAX && !(pg_perms & NO_PERM_MARKED)) {
 				//				cprintf("\nNot marked as user\n");
 				env_exit();
 			}
@@ -247,15 +247,12 @@ void page_fault_handler(struct Env * faulted_env, uint32 fault_va)
 	{
 		//cprintf("PLACEMENT=========================WS Size = %d\n", wsSize );
 		//TODO: [PROJECT'24.MS2 - #09] [2] FAULT HANDLER I - Placement [DONE]
-		// Write your code here, remove the panic and write your code
-		//		panic("page_fault_handler().PLACEMENT is not implemented yet...!!");
 
 		if (faulted_env == NULL) panic("page_fault_handler: Invalid environment pointer\n");
 
-
 		struct FrameInfo* faulted_pg_frame = NULL;
 		allocate_frame(&faulted_pg_frame);
-		map_frame(faulted_env->env_page_directory, faulted_pg_frame, fault_va, PERM_WRITEABLE | PERM_USER);
+		map_frame(faulted_env->env_page_directory, faulted_pg_frame, fault_va, NO_PERM_MARKED | PERM_WRITEABLE | PERM_USER);
 
 		if (pf_read_env_page(faulted_env, (void *) fault_va) != 0) {
 			if (!(fault_va >= USER_HEAP_START && fault_va < USER_HEAP_MAX)

@@ -130,22 +130,19 @@ void* sys_sbrk(int numOfPages)
 	 * NOTES:
 	 * 	1) As in real OS, allocate pages lazily. While sbrk moves the segment break, pages are not allocated
 	 * 		until the user program actually tries to access data in its heap (i.e. will be allocated via the fault handler).
-	 * 	2) Allocating additional pages for a process� heap will fail if, for example, the free frames are exhausted
+	 * 	2) Allocating additional pages for a process’ heap will fail if, for example, the free frames are exhausted
 	 * 		or the break exceed the limit of the dynamic allocator. If sys_sbrk fails, the net effect should
 	 * 		be that sys_sbrk returns (void*) -1 and that the segment break and the process heap are unaffected.
 	 * 		You might have to undo any operations you have done so far in this case.
 	 */
 
 	//TODO: [PROJECT'24.MS2 - #11] [3] USER HEAP - sys_sbrk [DONE]
-
 	struct Env* env = get_cpu_proc(); //the current running Environment to adjust its break limit
 
 	// This is not defined in the requirements, however, it's a corner case, had to handle it.
 	if (numOfPages < 0) panic("UHeap SBRK: CANNOT ALLOCATE NEGATIVE NUM OF PAGES");
 	if (numOfPages == 0) return (void*) env->uh_soft_cap;
-
-	if (env->uh_soft_cap + (numOfPages * PAGE_SIZE) > env->uh_hard_cap
-			|| env->uh_soft_cap + (numOfPages * PAGE_SIZE) < USER_HEAP_START) return (void*)-1;
+	if (env->uh_soft_cap + (numOfPages * PAGE_SIZE) > env->uh_hard_cap) return (void*)-1;
 
 	uint32 old_cap = env->uh_soft_cap;
 	env->uh_soft_cap += (numOfPages * PAGE_SIZE);
@@ -155,8 +152,6 @@ void* sys_sbrk(int numOfPages)
 
 	// return start of allocated space
 	return (void*) old_cap;
-
-
 }
 
 //=====================================
@@ -164,6 +159,10 @@ void* sys_sbrk(int numOfPages)
 //=====================================
 void mark_page(uint32* pg_table, uint32 virtual_address) {
 	pg_table[PTX(virtual_address)] |= NO_PERM_MARKED | PERM_USER | PERM_WRITEABLE;
+}
+
+void unmark_page(uint32* pg_table, uint32 virtual_address) {
+	pg_table[PTX(virtual_address)] &= ~NO_PERM_MARKED;
 }
 
 void allocate_user_mem(struct Env* e, uint32 virtual_address, uint32 size)
@@ -185,17 +184,17 @@ void allocate_user_mem(struct Env* e, uint32 virtual_address, uint32 size)
 //=====================================
 void free_user_mem(struct Env* e, uint32 virtual_address, uint32 size)
 {
-	/*====================================*/
-	/*Remove this line before start coding*/
-	//	inctst();
-	//	return;
-	/*====================================*/
+	//TODO: [PROJECT'24.MS2 - #15] [3] USER HEAP [KERNEL SIDE] - free_user_mem [DONE]
+	for (uint32 iter = virtual_address, limit = virtual_address + size; iter < limit; iter += PAGE_SIZE) {
+		uint32* pg_table = NULL;
+		get_page_table(e->env_page_directory, iter, &pg_table);
 
-	//TODO: [PROJECT'24.MS2 - #15] [3] USER HEAP [KERNEL SIDE] - free_user_mem
-	// Write your code here, remove the panic and write your code
-	panic("free_user_mem() is not implemented yet...!!");
+		if (pg_table == NULL) return;
 
-
+		unmark_page(pg_table, iter);
+		env_page_ws_invalidate(e, iter);
+		pf_remove_env_page(e, iter);
+	}
 	//TODO: [PROJECT'24.MS2 - BONUS#3] [3] USER HEAP [KERNEL SIDE] - O(1) free_user_mem
 }
 

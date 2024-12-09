@@ -1,5 +1,9 @@
 #include <inc/lib.h>
 
+/*Added tracking structure*/
+int32 uh_pgs_status[ADDRESS_SPACE_PAGES]; // This array covers the entire address space of a 32-bit system given the illusionist role.
+uint8 uh_pgs_init = 0;
+
 //==================================================================================//
 //============================ REQUIRED FUNCTIONS ==================================//
 //==================================================================================//
@@ -22,14 +26,68 @@ void* malloc(uint32 size)
 	//DON'T CHANGE THIS CODE========================================
 	if (size == 0) return NULL ;
 	//==============================================================
-	//TODO: [PROJECT'24.MS2 - #12] [3] USER HEAP [USER SIDE] - malloc()
-	// Write your code here, remove the panic and write your code
-	panic("malloc() is not implemented yet...!!");
-	return NULL;
-	//Use sys_isUHeapPlacementStrategyFIRSTFIT() and	sys_isUHeapPlacementStrategyBESTFIT()
-	//to check the current strategy
+	//TODO: [PROJECT'24.MS2 - #12] [3] USER HEAP [USER SIDE] - malloc() [DONE]
 
+	if (sys_isUHeapPlacementStrategyFIRSTFIT()) {
+		return malloc_ff(size);
+	} else if (sys_isUHeapPlacementStrategyBESTFIT()){
+		return malloc_bf(size);
+	} else {
+		panic("Placement strategy not implemented, Try FF");
+		return NULL;
+	}
 }
+
+
+void* malloc_ff(unsigned int size) {
+	if (size <= DYN_ALLOC_MAX_BLOCK_SIZE) {
+		return alloc_block_FF(size); // Already implemented and working
+	}
+
+	size = ROUNDUP(size, PAGE_SIZE);
+	uint16 pages_requested_num = size / PAGE_SIZE;
+	uint16 curr_consecutive_pgs = 0;
+
+	if (uh_pgs_init == 0) {
+		memset(uh_pgs_status, 0, sizeof(uh_pgs_status));
+		uh_pgs_init = 1;
+	}
+
+	// Iterate through the UHEAP pages space for enough consecutive free pages.
+	for (uint32 iter = myEnv->uh_pages_start; iter < USER_HEAP_MAX; iter += PAGE_SIZE) {
+
+		if (uh_pgs_status[iter/PAGE_SIZE]) {
+			// Resets consecutive pages tracking
+			curr_consecutive_pgs = 0;
+
+			// This line takes a few days to figure out
+			// Skips over the allocated area, no point in iterating them, also time-consuming for no reason.
+			iter += (uh_pgs_status[iter/PAGE_SIZE] - 1) * PAGE_SIZE;
+			continue;
+		}
+
+		curr_consecutive_pgs++;
+
+		if (curr_consecutive_pgs == pages_requested_num) {
+			uint32 alloc_start_addr = iter - size + PAGE_SIZE;
+			uh_pgs_status[alloc_start_addr/PAGE_SIZE] = pages_requested_num;
+			sys_allocate_user_mem(alloc_start_addr, size);
+			return (void*)alloc_start_addr;
+		}
+	}
+
+	return NULL; // Me no can do.
+}
+
+void* malloc_bf(unsigned int size) {
+	if (size <= DYN_ALLOC_MAX_BLOCK_SIZE) {
+		return alloc_block_BF(size);
+	} else { // Allocate page
+		panic("Placement strategy not implemented");
+		return NULL;
+	}
+}
+
 
 //=================================
 // [3] FREE SPACE FROM USER HEAP:

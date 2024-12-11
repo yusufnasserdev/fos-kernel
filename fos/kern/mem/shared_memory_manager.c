@@ -130,12 +130,26 @@ struct Share* get_share(int32 ownerID, char* name)
 //=========================
 int createSharedObject(int32 ownerID, char* shareName, uint32 size, uint8 isWritable, void* virtual_address)
 {
-	//TODO: [PROJECT'24.MS2 - #19] [4] SHARED MEMORY [KERNEL SIDE] - createSharedObject()
-	//COMMENT THE FOLLOWING LINE BEFORE START CODING
-	panic("createSharedObject is not implemented yet");
-	//Your Code is Here...
+	//TODO: [PROJECT'24.MS2 - #19] [4] SHARED MEMORY [KERNEL SIDE] - createSharedObject() [DONE]
+	if (get_share(ownerID, shareName) != NULL) return E_SHARED_MEM_EXISTS;
 
-	struct Env* myenv = get_cpu_proc(); //The calling environment
+	struct Share* new_share = create_share(ownerID, shareName, size, isWritable);
+	if (new_share == NULL) return E_NO_SHARE;
+
+	struct Env* myenv = get_cpu_proc();
+	uint32 casted_address = (uint32) virtual_address;
+	for (uint32 iter = 0, limit = casted_address + size; casted_address < limit; casted_address += PAGE_SIZE) {
+		struct FrameInfo* new_frame = NULL;
+		allocate_frame(&new_frame);
+		map_frame(myenv->env_page_directory, new_frame, casted_address, PERM_USER | PERM_WRITEABLE);
+		new_share->framesStorage[iter] = (struct FrameInfo*) casted_address;
+	}
+
+	acquire_spinlock(&AllShares.shareslock);
+	LIST_INSERT_TAIL(&AllShares.shares_list, new_share);
+	release_spinlock(&AllShares.shareslock);
+
+	return new_share->ID;
 }
 
 

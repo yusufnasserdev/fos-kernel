@@ -79,11 +79,26 @@ inline struct FrameInfo** create_frames_storage(int numOfFrames)
 //Return: allocatedObject (pointer to struct Share) passed by reference
 struct Share* create_share(int32 ownerID, char* shareName, uint32 size, uint8 isWritable)
 {
-	//TODO: [PROJECT'24.MS2 - #16] [4] SHARED MEMORY - create_share()
-	//COMMENT THE FOLLOWING LINE BEFORE START CODING
-	panic("create_share is not implemented yet");
-	//Your Code is Here...
+	//TODO: [PROJECT'24.MS2 - #16] [4] SHARED MEMORY - create_share() [DONE]
+	struct Share* new_share = (struct Share*) kmalloc(sizeof(struct Share));
+	if (new_share == NULL) return NULL;
 
+	new_share->ownerID = ownerID;
+	new_share->name = shareName;
+	new_share->size = size;
+	new_share->isWritable = isWritable;
+	new_share->references = 1;
+	new_share->ID = ((uint32)new_share | 0x80000000);
+	new_share->framesStorage = create_frames_storage(ROUNDUP(size, PAGE_SIZE));
+
+	// Frames storage allocation failed, undoing previous allocation
+	if (new_share->framesStorage == NULL)
+	{
+		kfree(new_share);
+		return NULL;
+	}
+
+	return new_share;
 }
 
 //=============================

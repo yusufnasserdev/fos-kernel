@@ -93,7 +93,7 @@ void* malloc_bf(unsigned int size) {
 //=================================
 void free(void* virtual_address)
 {
-	//TODO: [PROJECT'24.MS2 - #14] [3] USER HEAP [USER SIDE] - free() [DOING]
+	//TODO: [PROJECT'24.MS2 - #14] [3] USER HEAP [USER SIDE] - free() [DONE]
 	if (!sys_isUHeapPlacementStrategyFIRSTFIT()) panic("ME NO CAN DO, only ff implemented for UH free\n");
 
 	uint32 casted_address = (uint32)virtual_address; // casting the address to be comparable, instead of casting multiple times.
@@ -140,7 +140,6 @@ void* smalloc(char *sharedVarName, uint32 size, uint8 isWritable)
 			// Resets consecutive pages tracking
 			curr_consecutive_pgs = 0;
 
-			// This line takes a few days to figure out
 			// Skips over the allocated area, no point in iterating them, also time-consuming for no reason.
 			iter += (uh_pgs_status[iter/PAGE_SIZE] - 1) * PAGE_SIZE;
 			continue;
@@ -167,10 +166,39 @@ void* smalloc(char *sharedVarName, uint32 size, uint8 isWritable)
 //========================================
 void* sget(int32 ownerEnvID, char *sharedVarName)
 {
-	//TODO: [PROJECT'24.MS2 - #20] [4] SHARED MEMORY [USER SIDE] - sget()
-	// Write your code here, remove the panic and write your code
-	panic("sget() is not implemented yet...!!");
-	return NULL;
+	//TODO: [PROJECT'24.MS2 - #20] [4] SHARED MEMORY [USER SIDE] - sget() [DONE]
+
+	uint32 size = sys_getSizeOfSharedObject(ownerEnvID, sharedVarName);
+	if (size == E_SHARED_MEM_NOT_EXISTS) return NULL;
+
+	uint32 pages_requested_num = size / PAGE_SIZE;
+	uint32 curr_consecutive_pgs = 0;
+
+	// Iterate through the UHEAP pages space for enough consecutive free pages.
+	for (uint32 iter = myEnv->uh_pages_start; iter < USER_HEAP_MAX; iter += PAGE_SIZE) {
+		if (uh_pgs_status[iter/PAGE_SIZE]) {
+			// Resets consecutive pages tracking
+			curr_consecutive_pgs = 0;
+
+			// Skips over the allocated area, no point in iterating them, also time-consuming for no reason.
+			iter += (uh_pgs_status[iter/PAGE_SIZE] - 1) * PAGE_SIZE;
+			continue;
+		}
+
+		curr_consecutive_pgs++;
+
+		if (curr_consecutive_pgs == pages_requested_num) {
+			uint32 alloc_start_addr = iter - size + PAGE_SIZE;
+			int ret = sys_getSharedObject(ownerEnvID, sharedVarName, (void*)alloc_start_addr);
+			if (ret == E_SHARED_MEM_NOT_EXISTS) {
+				return NULL;
+			}
+			uh_pgs_status[alloc_start_addr/PAGE_SIZE] = pages_requested_num;
+			return (void*)alloc_start_addr;
+		}
+	}
+
+	return NULL; // Me no can do.
 }
 
 

@@ -84,12 +84,12 @@ struct Share* create_share(int32 ownerID, char* shareName, uint32 size, uint8 is
 	if (new_share == NULL) return NULL;
 
 	new_share->ownerID = ownerID;
-	new_share->name = shareName;
+	strcpy(new_share->name, shareName);
 	new_share->size = size;
 	new_share->isWritable = isWritable;
 	new_share->references = 1;
 	new_share->ID = ((uint32)new_share | 0x80000000);
-	new_share->framesStorage = create_frames_storage(ROUNDUP(size, PAGE_SIZE));
+	new_share->framesStorage = create_frames_storage(size / PAGE_SIZE);
 
 	// Frames storage allocation failed, undoing previous allocation
 	if (new_share->framesStorage == NULL)
@@ -142,7 +142,7 @@ int createSharedObject(int32 ownerID, char* shareName, uint32 size, uint8 isWrit
 		struct FrameInfo* new_frame = NULL;
 		allocate_frame(&new_frame);
 		map_frame(myenv->env_page_directory, new_frame, casted_address, PERM_USER | PERM_WRITEABLE);
-		new_share->framesStorage[iter] = (struct FrameInfo*) casted_address;
+		new_share->framesStorage[iter] = new_frame;
 	}
 
 	acquire_spinlock(&AllShares.shareslock);
@@ -158,12 +158,23 @@ int createSharedObject(int32 ownerID, char* shareName, uint32 size, uint8 isWrit
 //======================
 int getSharedObject(int32 ownerID, char* shareName, void* virtual_address)
 {
-	//TODO: [PROJECT'24.MS2 - #21] [4] SHARED MEMORY [KERNEL SIDE] - getSharedObject()
-	//COMMENT THE FOLLOWING LINE BEFORE START CODING
-	panic("getSharedObject is not implemented yet");
-	//Your Code is Here...
+	//TODO: [PROJECT'24.MS2 - #21] [4] SHARED MEMORY [KERNEL SIDE] - getSharedObject() [DONE]
+	struct Share* share_obj = get_share(ownerID, shareName);
+	if (share_obj == NULL) return E_SHARED_MEM_NOT_EXISTS;
+
+	// Setting up the permissions as per the shared objects predefined isWritable.
+	int perms = PERM_USER;
+	if (share_obj->isWritable) perms |= PERM_WRITEABLE;
 
 	struct Env* myenv = get_cpu_proc(); //The calling environment
+	uint32 casted_address = (uint32) virtual_address, size = share_obj->size;
+	for (uint32 iter = 0, limit = casted_address + size; casted_address < limit; casted_address += PAGE_SIZE) {
+		struct FrameInfo* allocated_frame = share_obj->framesStorage[iter];
+		map_frame(myenv->env_page_directory, allocated_frame, casted_address, perms);
+	}
+
+	share_obj->references++;
+	return share_obj->ID;
 }
 
 //==================================================================================//

@@ -124,9 +124,42 @@ void* smalloc(char *sharedVarName, uint32 size, uint8 isWritable)
 	if (size == 0) return NULL ;
 	//==============================================================
 	//TODO: [PROJECT'24.MS2 - #18] [4] SHARED MEMORY [USER SIDE] - smalloc()
-	// Write your code here, remove the panic and write your code
-	panic("smalloc() is not implemented yet...!!");
-	return NULL;
+
+	size = ROUNDUP(size, PAGE_SIZE);
+	uint32 pages_requested_num = size / PAGE_SIZE;
+	uint32 curr_consecutive_pgs = 0;
+
+	if (uh_pgs_init == 0) {
+		memset(uh_pgs_status, 0, sizeof(uh_pgs_status));
+		uh_pgs_init = 1;
+	}
+
+	// Iterate through the UHEAP pages space for enough consecutive free pages.
+	for (uint32 iter = myEnv->uh_pages_start; iter < USER_HEAP_MAX; iter += PAGE_SIZE) {
+		if (uh_pgs_status[iter/PAGE_SIZE]) {
+			// Resets consecutive pages tracking
+			curr_consecutive_pgs = 0;
+
+			// This line takes a few days to figure out
+			// Skips over the allocated area, no point in iterating them, also time-consuming for no reason.
+			iter += (uh_pgs_status[iter/PAGE_SIZE] - 1) * PAGE_SIZE;
+			continue;
+		}
+
+		curr_consecutive_pgs++;
+
+		if (curr_consecutive_pgs == pages_requested_num) {
+			uint32 alloc_start_addr = iter - size + PAGE_SIZE;
+			int ret = sys_createSharedObject(sharedVarName, size, isWritable, (void*)alloc_start_addr);
+			if (ret == E_NO_SHARE || ret == E_SHARED_MEM_EXISTS) {
+				return NULL;
+			}
+			uh_pgs_status[alloc_start_addr/PAGE_SIZE] = pages_requested_num;
+			return (void*)alloc_start_addr;
+		}
+	}
+
+	return NULL; // Me no can do.
 }
 
 //========================================

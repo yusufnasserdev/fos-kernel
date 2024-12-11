@@ -64,11 +64,11 @@ int getSizeOfSharedObject(int32 ownerID, char* shareName)
 // Create the frames_storage and initialize it by 0
 inline struct FrameInfo** create_frames_storage(int numOfFrames)
 {
-	//TODO: [PROJECT'24.MS2 - #16] [4] SHARED MEMORY - create_frames_storage()
-	//COMMENT THE FOLLOWING LINE BEFORE START CODING
-	panic("create_frames_storage is not implemented yet");
-	//Your Code is Here...
-
+	//TODO: [PROJECT'24.MS2 - #16] [4] SHARED MEMORY - create_frames_storage() [DONE]
+	struct FrameInfo** frames_array = (struct FrameInfo**) kmalloc(numOfFrames * sizeof(struct FrameInfo*));
+	if (frames_array == NULL) return NULL;
+	for (int i = 0; i < numOfFrames; i++) frames_array[i] = NULL;
+	return frames_array;
 }
 
 //=====================================

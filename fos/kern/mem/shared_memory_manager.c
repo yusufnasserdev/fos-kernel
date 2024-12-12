@@ -125,6 +125,22 @@ struct Share* get_share(int32 ownerID, char* name)
 	return NULL;
 }
 
+struct Share* get_share_by_id(int32 ID)
+{
+	struct Share* iterator_share = NULL;
+
+	acquire_spinlock(&AllShares.shareslock);
+	LIST_FOREACH(iterator_share, &AllShares.shares_list) {
+		if (iterator_share->ID == ID) {
+			release_spinlock(&AllShares.shareslock);
+			return iterator_share;
+		}
+	}
+
+	release_spinlock(&AllShares.shareslock);
+	return NULL;
+}
+
 //=========================
 // [4] Create Share Object:
 //=========================
@@ -199,19 +215,50 @@ void free_share(struct Share* ptrShare)
 //========================
 // [B2] Free Share Object:
 //========================
+void cleanup_unused_page_tables(uint32 casted_address, uint32 size, struct Env *myenv) {
+	uint32 tbl_low = ROUNDDOWN(casted_address, PAGE_TABLE_SPACE);
+	uint32 tbl_high = ROUNDUP(casted_address + size, PAGE_TABLE_SPACE);
+
+	for (uint32 table_addr = tbl_low; table_addr < tbl_high; table_addr += PAGE_TABLE_SPACE) {
+		uint8 is_table_used = 0;
+
+		// Retrieve the page table corresponding to the current address
+		uint32* page_table = NULL;
+		get_page_table(myenv->env_page_directory, table_addr, &page_table);
+
+		if (page_table != NULL) {
+			for (uint32 page_addr = table_addr; page_addr < table_addr + PAGE_TABLE_SPACE; page_addr += PAGE_SIZE) {
+				struct FrameInfo *frame_info = get_frame_info(myenv->env_page_directory, page_addr, &page_table);
+
+				if (frame_info != NULL) {
+					is_table_used = 1;
+					break;
+				}
+			}
+
+			if (!is_table_used) {
+				// Free the unused page table
+				kfree((void *)kheap_virtual_address(myenv->env_page_directory[PDX(table_addr)]));
+				myenv->env_page_directory[PDX(table_addr)] = 0;
+			}
+		}
+	}
+}
+
+
 int freeSharedObject(int32 sharedObjectID, void *startVA)
 {
 	//TODO: [PROJECT'24.MS2 - BONUS#4] [4] SHARED MEMORY [KERNEL SIDE] - freeSharedObject() [DONE]
 	struct Share* share_obj = get_share_by_id(sharedObjectID);
+	int size = share_obj->size;
 	struct Env* myenv = get_cpu_proc();
 	uint32 casted_address = (uint32) startVA;
 
-	for (uint32 iter = 0, limit = casted_address + share_obj->size; casted_address < limit; casted_address += PAGE_SIZE) {
-		unmap_frame(myenv->env_page_directory, casted_address);
-		if (!pd_is_table_used(myenv->env_page_directory, casted_address)) {
-			pd_clear_page_dir_entry(myenv->env_page_directory, casted_address);
-		}
+	for (uint32 iter = casted_address, limit = casted_address + size; iter < limit; iter += PAGE_SIZE) {
+		unmap_frame(myenv->env_page_directory, iter);
 	}
+
+	cleanup_unused_page_tables(casted_address, size, myenv);
 
 	share_obj->references--;
 	if (share_obj->references == 0) free_share(share_obj);

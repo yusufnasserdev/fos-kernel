@@ -11,6 +11,8 @@
 #include <inc/environment_definitions.h>
 #include <kern/conc/spinlock.h>
 
+#define PAGE_TABLE_SPACE PAGE_SIZE * 1024
+
 struct Share
 {
 	//Unique ID for this Share object
@@ -46,7 +48,7 @@ LIST_HEAD(Share_List, Share);		// Declares 'struct Share_List'
 #else
 	struct
 	{
-		struct Share_List shares_list ;	//List of all share variables created by any process
+		struct Share_List shares_list;	//List of all share variables created by any process
 		struct spinlock shareslock;		//Use it to protect the shares_list in the kernel
 	}AllShares;
 

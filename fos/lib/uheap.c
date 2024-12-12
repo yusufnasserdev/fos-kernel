@@ -3,6 +3,7 @@
 /*Added tracking structure*/
 int32 uh_pgs_status[ADDRESS_SPACE_PAGES]; // This array covers the entire address space of a 32-bit system given the illusionist role.
 uint8 uh_pgs_init = 0;
+uint32 sharedlink[ADDRESS_SPACE_PAGES];
 
 //==================================================================================//
 //========================= Share Track FUNCTIONS ==================================//
@@ -16,6 +17,8 @@ void init_share_tracking() {
 }
 
 void add_share(uint32 va, int32 ID) {
+	if (shr_trck_init == 0) init_share_tracking();
+
 	struct ShareTrack* share_track = malloc(sizeof(struct ShareTrack));
 	share_track->ID = ID;
 	share_track->virt_addr = va;
@@ -82,6 +85,7 @@ void* malloc_ff(unsigned int size) {
 
 	if (uh_pgs_init == 0) {
 		memset(uh_pgs_status, 0, sizeof(uh_pgs_status));
+		memset(sharedlink, 0, sizeof(uh_pgs_status));
 		uh_pgs_init = 1;
 	}
 
@@ -183,7 +187,8 @@ void* smalloc(char *sharedVarName, uint32 size, uint8 isWritable)
 			if (ret == E_NO_SHARE || ret == E_SHARED_MEM_EXISTS) {
 				return NULL;
 			}
-			add_share(alloc_start_addr, ret);
+			sharedlink[alloc_start_addr/PAGE_SIZE] = ret;
+//			add_share(alloc_start_addr, ret);
 			uh_pgs_status[alloc_start_addr/PAGE_SIZE] = pages_requested_num;
 			return (void*)alloc_start_addr;
 		}
@@ -252,9 +257,11 @@ void sfree(void* virtual_address)
 {
 	//TODO: [PROJECT'24.MS2 - BONUS#4] [4] SHARED MEMORY [USER SIDE] - sfree() [DONE]
 	uint32 casted_address = (uint32)virtual_address;
-	if (casted_address >= myEnv->uh_pages_start && casted_address < USER_HEAP_MAX) panic("SFREE: INVALID ADDRESS\n");
+	if (casted_address < myEnv->uh_pages_start || casted_address >= USER_HEAP_MAX) panic("SFREE: INVALID ADDRESS\n");
 
-	int32 share_id = find_share_id(casted_address);
+//	int32 share_id = find_share_id(casted_address);
+
+	int32 share_id = sharedlink[casted_address/PAGE_SIZE];
 	sys_freeSharedObject(share_id, virtual_address);
 	uh_pgs_status[casted_address/PAGE_SIZE] = 0;
 }

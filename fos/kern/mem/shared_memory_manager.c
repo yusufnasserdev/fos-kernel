@@ -199,9 +199,20 @@ void free_share(struct Share* ptrShare)
 //========================
 int freeSharedObject(int32 sharedObjectID, void *startVA)
 {
-	//TODO: [PROJECT'24.MS2 - BONUS#4] [4] SHARED MEMORY [KERNEL SIDE] - freeSharedObject()
-	//COMMENT THE FOLLOWING LINE BEFORE START CODING
-	panic("freeSharedObject is not implemented yet");
-	//Your Code is Here...
+	//TODO: [PROJECT'24.MS2 - BONUS#4] [4] SHARED MEMORY [KERNEL SIDE] - freeSharedObject() [DONE]
+	struct Share* share_obj = get_share_by_id(sharedObjectID);
+	struct Env* myenv = get_cpu_proc();
+	uint32 casted_address = (uint32) startVA;
 
+	for (uint32 iter = 0, limit = casted_address + share_obj->size; casted_address < limit; casted_address += PAGE_SIZE) {
+		unmap_frame(myenv->env_page_directory, casted_address);
+		if (!pd_is_table_used(myenv->env_page_directory, casted_address)) {
+			pd_clear_page_dir_entry(myenv->env_page_directory, casted_address);
+		}
+	}
+
+	share_obj->references--;
+	if (share_obj->references == 0) free_share(share_obj);
+	tlbflush();
+	return 0;
 }

@@ -21,4 +21,16 @@ void *realloc(void *virtual_address, uint32 new_size);
 void *malloc_ff(uint32 size);
 void *malloc_bf(uint32 size);
 
+struct ShareTrack
+{
+	uint32 virt_addr;
+	int32 ID;
+
+	LIST_ENTRY(ShareTrack) prev_next_info;	/* linked list links */
+};
+
+LIST_HEAD(ShareTrack_LIST, ShareTrack);
+struct ShareTrack_LIST shareTrackList;
+
+
 #endif

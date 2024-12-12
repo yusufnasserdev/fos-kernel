@@ -293,7 +293,6 @@ void *alloc_block_FF(uint32 size)
 	struct BlockElement* iterator_block;
 
 	LIST_FOREACH(iterator_block, &freeBlocksList) {
-//		cprintf("\nLIST_FOREACH(iterator_block, &freeBlocksList)\n");
 		uint32 blk_size = get_block_size(iterator_block);
 		if (blk_size >= size) {
 			// Check if it can be split to eliminate internal fragmentation.
@@ -304,16 +303,12 @@ void *alloc_block_FF(uint32 size)
 				allocate_free_block(iterator_block, blk_size);
 			}
 
-//			cprintf("\nGOT A MATCH\n");
 			return iterator_block;
 		}
 	}
 
 	// If no suitable block found, request more memory
-//	cprintf("\nNo suitable block found\n");
 	void* sbrk_ret = sbrk(ROUNDUP(size, PAGE_SIZE)/PAGE_SIZE);
-//	cprintf("\nSbrk_ret: %x\n", sbrk_ret);
-
 	if (sbrk_ret != SBRK_FAIL) {
 		return extend_cap(size, sbrk_ret);
 	}

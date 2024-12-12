@@ -188,11 +188,13 @@ int getSharedObject(int32 ownerID, char* shareName, void* virtual_address)
 //it should free its framesStorage and the share object itself
 void free_share(struct Share* ptrShare)
 {
-	//TODO: [PROJECT'24.MS2 - BONUS#4] [4] SHARED MEMORY [KERNEL SIDE] - free_share()
-	//COMMENT THE FOLLOWING LINE BEFORE START CODING
-	panic("free_share is not implemented yet");
-	//Your Code is Here...
+	//TODO: [PROJECT'24.MS2 - BONUS#4] [4] SHARED MEMORY [KERNEL SIDE] - free_share() [DONE]
+	acquire_spinlock(&AllShares.shareslock);
+	LIST_REMOVE(&AllShares.shares_list, ptrShare);
+	release_spinlock(&AllShares.shareslock);
 
+	kfree(ptrShare->framesStorage);
+	kfree(ptrShare);
 }
 //========================
 // [B2] Free Share Object:

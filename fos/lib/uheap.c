@@ -206,8 +206,9 @@ void* sget(int32 ownerEnvID, char *sharedVarName)
 	//TODO: [PROJECT'24.MS2 - #20] [4] SHARED MEMORY [USER SIDE] - sget() [DONE]
 
 	uint32 size = sys_getSizeOfSharedObject(ownerEnvID, sharedVarName);
-	if (size == E_SHARED_MEM_NOT_EXISTS) return NULL;
+	if (size == E_SHARED_MEM_NOT_EXISTS) return NULL; // Sorry for bad naming, my hand was forced.
 
+	size = ROUNDUP(size, PAGE_SIZE);
 	uint32 pages_requested_num = size / PAGE_SIZE;
 	uint32 curr_consecutive_pgs = 0;
 
@@ -259,10 +260,10 @@ void sfree(void* virtual_address)
 {
 	//TODO: [PROJECT'24.MS2 - BONUS#4] [4] SHARED MEMORY [USER SIDE] - sfree() [DONE]
 	uint32 casted_address = (uint32)virtual_address;
-	if (casted_address < myEnv->uh_pages_start || casted_address >= USER_HEAP_MAX) panic("SFREE: INVALID ADDRESS\n");
+	if (casted_address < myEnv->uh_pages_start || casted_address >= USER_HEAP_MAX) return; // panic("SFREE: INVALID ADDRESS\n");
 
 	int32 share_id = sharedlink[casted_address/PAGE_SIZE];
-	if (share_id == 0) panic("SFREE: Address is not shared\n");
+	if (share_id == 0) return; // panic("SFREE: Address is not shared\n");
 
 	sys_freeSharedObject(share_id, virtual_address);
 	sharedlink[casted_address/PAGE_SIZE] = 0;

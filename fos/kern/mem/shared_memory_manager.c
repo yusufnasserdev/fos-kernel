@@ -101,6 +101,17 @@ struct Share* create_share(int32 ownerID, char* shareName, uint32 size, uint8 is
 	return new_share;
 }
 
+void print_share(struct Share* prt_share)
+{
+	if (prt_share == NULL) return;
+
+	cprintf("\n ID: %d ", prt_share->ownerID);
+	cprintf("\n references: %d ", prt_share->references);
+	//	cprintf("\n framesStorage: %x ", prt_share->framesStorage);
+	cprintf("\n---\n");
+}
+
+
 //=============================
 // [3] Search for Share Object:
 //=============================
@@ -158,7 +169,8 @@ int createSharedObject(int32 ownerID, char* shareName, uint32 size, uint8 isWrit
 		struct FrameInfo* new_frame = NULL;
 		allocate_frame(&new_frame);
 		map_frame(myenv->env_page_directory, new_frame, casted_address, PERM_USER | PERM_WRITEABLE);
-		new_share->framesStorage[iter] = new_frame;
+		new_frame->virtual_address = casted_address;
+		new_share->framesStorage[iter++] = new_frame; // this ++ took a couple of days of my life
 	}
 
 	acquire_spinlock(&AllShares.shareslock);
@@ -175,6 +187,7 @@ int createSharedObject(int32 ownerID, char* shareName, uint32 size, uint8 isWrit
 int getSharedObject(int32 ownerID, char* shareName, void* virtual_address)
 {
 	//TODO: [PROJECT'24.MS2 - #21] [4] SHARED MEMORY [KERNEL SIDE] - getSharedObject() [DONE]
+
 	struct Share* share_obj = get_share(ownerID, shareName);
 	if (share_obj == NULL) return E_SHARED_MEM_NOT_EXISTS;
 
@@ -185,11 +198,12 @@ int getSharedObject(int32 ownerID, char* shareName, void* virtual_address)
 	struct Env* myenv = get_cpu_proc(); //The calling environment
 	uint32 casted_address = (uint32) virtual_address, size = share_obj->size;
 	for (uint32 iter = 0, limit = casted_address + size; casted_address < limit; casted_address += PAGE_SIZE) {
-		struct FrameInfo* allocated_frame = share_obj->framesStorage[iter];
+		struct FrameInfo* allocated_frame = share_obj->framesStorage[iter++]; // this one too.
 		map_frame(myenv->env_page_directory, allocated_frame, casted_address, perms);
 	}
 
 	share_obj->references++;
+
 	return share_obj->ID;
 }
 
@@ -205,17 +219,20 @@ int getSharedObject(int32 ownerID, char* shareName, void* virtual_address)
 void free_share(struct Share* ptrShare)
 {
 	//TODO: [PROJECT'24.MS2 - BONUS#4] [4] SHARED MEMORY [KERNEL SIDE] - free_share() [DONE]
-	acquire_spinlock(&AllShares.shareslock);
-	LIST_REMOVE(&AllShares.shares_list, ptrShare);
-	release_spinlock(&AllShares.shareslock);
+	if (ptrShare->references != 0) return;
 
-	kfree(ptrShare->framesStorage);
-	kfree(ptrShare);
+	acquire_spinlock(&AllShares.shareslock);
+	if (ptrShare->references == 0) {
+		LIST_REMOVE(&AllShares.shares_list, ptrShare);
+		kfree(ptrShare->framesStorage);
+		kfree(ptrShare);
+	}
+	release_spinlock(&AllShares.shareslock);
 }
 //========================
 // [B2] Free Share Object:
 //========================
-void cleanup_unused_page_tables(uint32 casted_address, uint32 size, struct Env *myenv) {
+void cleanup_unused_page_tables(uint32 casted_address, uint32 size, uint32 *pgdir) {
 	uint32 tbl_low = ROUNDDOWN(casted_address, PAGE_TABLE_SPACE);
 	uint32 tbl_high = ROUNDUP(casted_address + size, PAGE_TABLE_SPACE);
 
@@ -224,24 +241,24 @@ void cleanup_unused_page_tables(uint32 casted_address, uint32 size, struct Env *
 
 		// Retrieve the page table corresponding to the current address
 		uint32* page_table = NULL;
-		get_page_table(myenv->env_page_directory, table_addr, &page_table);
+		get_page_table(pgdir, table_addr, &page_table);
 
-		if (page_table != NULL) {
-			for (uint32 page_addr = table_addr; page_addr < table_addr + PAGE_TABLE_SPACE; page_addr += PAGE_SIZE) {
-				struct FrameInfo *frame_info = get_frame_info(myenv->env_page_directory, page_addr, &page_table);
+		if (page_table == NULL) continue;
 
-				if (frame_info != NULL) {
-					is_table_used = 1;
-					break;
-				}
-			}
+		for (uint32 page_addr = table_addr; page_addr < table_addr + PAGE_TABLE_SPACE; page_addr += PAGE_SIZE) {
+			struct FrameInfo *frame_info = get_frame_info(pgdir, page_addr, &page_table);
 
-			if (!is_table_used) {
-				// Free the unused page table
-				kfree((void *)kheap_virtual_address(myenv->env_page_directory[PDX(table_addr)]));
-				myenv->env_page_directory[PDX(table_addr)] = 0;
+			if (frame_info != NULL) {
+				is_table_used = 1;
+				break;
 			}
 		}
+
+		if (!is_table_used) { // Free the unused page table
+			kfree((void *)kheap_virtual_address(pgdir[PDX(table_addr)]));
+			pgdir[PDX(table_addr)] = 0;
+		}
+
 	}
 }
 
@@ -262,10 +279,11 @@ int freeSharedObject(int32 sharedObjectID, void *startVA)
 		unmap_frame(myenv->env_page_directory, iter);
 	}
 
-	cleanup_unused_page_tables(casted_address, size, myenv);
+	cleanup_unused_page_tables(casted_address, size, myenv->env_page_directory);
 
 	share_obj->references--;
-	if (share_obj->references == 0) free_share(share_obj);
+	free_share(share_obj);
 	tlbflush();
+
 	return 0;
 }

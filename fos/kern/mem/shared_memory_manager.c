@@ -250,6 +250,10 @@ int freeSharedObject(int32 sharedObjectID, void *startVA)
 {
 	//TODO: [PROJECT'24.MS2 - BONUS#4] [4] SHARED MEMORY [KERNEL SIDE] - freeSharedObject() [DONE]
 	struct Share* share_obj = get_share_by_id(sharedObjectID);
+	if (share_obj == NULL) {
+		cprintf("\nShare ID is not valid\n");
+		return -1;
+	}
 	int size = share_obj->size;
 	struct Env* myenv = get_cpu_proc();
 	uint32 casted_address = (uint32) startVA;

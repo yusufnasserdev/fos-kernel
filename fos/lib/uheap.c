@@ -165,6 +165,7 @@ void* smalloc(char *sharedVarName, uint32 size, uint8 isWritable)
 
 	if (uh_pgs_init == 0) {
 		memset(uh_pgs_status, 0, sizeof(uh_pgs_status));
+		memset(sharedlink, 0, sizeof(uh_pgs_status));
 		uh_pgs_init = 1;
 	}
 
@@ -229,6 +230,7 @@ void* sget(int32 ownerEnvID, char *sharedVarName)
 			if (ret == E_SHARED_MEM_NOT_EXISTS) {
 				return NULL;
 			}
+			sharedlink[alloc_start_addr/PAGE_SIZE] = ret;
 			uh_pgs_status[alloc_start_addr/PAGE_SIZE] = pages_requested_num;
 			return (void*)alloc_start_addr;
 		}
@@ -259,10 +261,11 @@ void sfree(void* virtual_address)
 	uint32 casted_address = (uint32)virtual_address;
 	if (casted_address < myEnv->uh_pages_start || casted_address >= USER_HEAP_MAX) panic("SFREE: INVALID ADDRESS\n");
 
-//	int32 share_id = find_share_id(casted_address);
-
 	int32 share_id = sharedlink[casted_address/PAGE_SIZE];
+	if (share_id == 0) panic("SFREE: Address is not shared\n");
+
 	sys_freeSharedObject(share_id, virtual_address);
+	sharedlink[casted_address/PAGE_SIZE] = 0;
 	uh_pgs_status[casted_address/PAGE_SIZE] = 0;
 }
 

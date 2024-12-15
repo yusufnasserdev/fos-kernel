@@ -1,13 +1,16 @@
 #include <inc/lib.h>
 
 /*Added tracking structure*/
-int32 uh_pgs_status[ADDRESS_SPACE_PAGES]; // This array covers the entire address space of a 32-bit system given the illusionist role.
 uint8 uh_pgs_init = 0;
+int32 uh_pgs_status[ADDRESS_SPACE_PAGES]; // This array covers the entire address space of a 32-bit system given the illusionist role.
 uint32 sharedlink[ADDRESS_SPACE_PAGES];
 
 //==================================================================================//
 //========================= Share Track FUNCTIONS ==================================//
 //==================================================================================//
+
+/*
+
 uint8 shr_trck_init = 0;
 void init_share_tracking() {
 	if (shr_trck_init != 0) return;
@@ -38,7 +41,7 @@ int32 find_share_id(uint32 va) {
 	return 0;
 }
 
-
+ */
 
 //==================================================================================//
 //============================ REQUIRED FUNCTIONS ==================================//
@@ -56,6 +59,15 @@ void* sbrk(int increment)
 //=================================
 // [2] ALLOCATE SPACE IN USER HEAP:
 //=================================
+
+void init_uh() {
+	if (uh_pgs_init == 1) return;
+
+	memset(uh_pgs_status, 0, sizeof(uh_pgs_status));
+	memset(sharedlink, 0, sizeof(sharedlink));
+	uh_pgs_init = 1;
+}
+
 void* malloc(uint32 size)
 {
 	//==============================================================
@@ -83,11 +95,7 @@ void* malloc_ff(unsigned int size) {
 	uint32 pages_requested_num = size / PAGE_SIZE;
 	uint32 curr_consecutive_pgs = 0;
 
-	if (uh_pgs_init == 0) {
-		memset(uh_pgs_status, 0, sizeof(uh_pgs_status));
-		memset(sharedlink, 0, sizeof(uh_pgs_status));
-		uh_pgs_init = 1;
-	}
+	init_uh();
 
 	// Iterate through the UHEAP pages space for enough consecutive free pages.
 	for (uint32 iter = myEnv->uh_pages_start; iter < USER_HEAP_MAX; iter += PAGE_SIZE) {
@@ -163,11 +171,7 @@ void* smalloc(char *sharedVarName, uint32 size, uint8 isWritable)
 	uint32 pages_requested_num = size / PAGE_SIZE;
 	uint32 curr_consecutive_pgs = 0;
 
-	if (uh_pgs_init == 0) {
-		memset(uh_pgs_status, 0, sizeof(uh_pgs_status));
-		memset(sharedlink, 0, sizeof(uh_pgs_status));
-		uh_pgs_init = 1;
-	}
+	init_uh();
 
 	// Iterate through the UHEAP pages space for enough consecutive free pages.
 	for (uint32 iter = myEnv->uh_pages_start; iter < USER_HEAP_MAX; iter += PAGE_SIZE) {
@@ -189,7 +193,6 @@ void* smalloc(char *sharedVarName, uint32 size, uint8 isWritable)
 				return NULL;
 			}
 			sharedlink[alloc_start_addr/PAGE_SIZE] = ret;
-//			add_share(alloc_start_addr, ret);
 			uh_pgs_status[alloc_start_addr/PAGE_SIZE] = pages_requested_num;
 			return (void*)alloc_start_addr;
 		}

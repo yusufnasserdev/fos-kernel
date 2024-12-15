@@ -158,10 +158,14 @@ struct Share* get_share_by_id(int32 ID)
 int createSharedObject(int32 ownerID, char* shareName, uint32 size, uint8 isWritable, void* virtual_address)
 {
 	//TODO: [PROJECT'24.MS2 - #19] [4] SHARED MEMORY [KERNEL SIDE] - createSharedObject() [DONE]
+
 	if (get_share(ownerID, shareName) != NULL) return E_SHARED_MEM_EXISTS;
 
 	struct Share* new_share = create_share(ownerID, shareName, size, isWritable);
 	if (new_share == NULL) return E_NO_SHARE;
+
+	uint8 held = holding_spinlock(&AllShares.shareslock);
+	if (!held) acquire_spinlock(&AllShares.shareslock);
 
 	struct Env* myenv = get_cpu_proc();
 	uint32 casted_address = (uint32) virtual_address;
@@ -173,9 +177,8 @@ int createSharedObject(int32 ownerID, char* shareName, uint32 size, uint8 isWrit
 		new_share->framesStorage[iter++] = new_frame; // this ++ took a couple of days of my life
 	}
 
-	acquire_spinlock(&AllShares.shareslock);
 	LIST_INSERT_TAIL(&AllShares.shares_list, new_share);
-	release_spinlock(&AllShares.shareslock);
+	if (!held) release_spinlock(&AllShares.shareslock);
 
 	return new_share->ID;
 }
@@ -191,6 +194,9 @@ int getSharedObject(int32 ownerID, char* shareName, void* virtual_address)
 	struct Share* share_obj = get_share(ownerID, shareName);
 	if (share_obj == NULL) return E_SHARED_MEM_NOT_EXISTS;
 
+	uint8 held = holding_spinlock(&AllShares.shareslock);
+	if (!held) acquire_spinlock(&AllShares.shareslock);
+
 	// Setting up the permissions as per the shared objects predefined isWritable.
 	int perms = PERM_USER;
 	if (share_obj->isWritable) perms |= PERM_WRITEABLE;
@@ -204,6 +210,7 @@ int getSharedObject(int32 ownerID, char* shareName, void* virtual_address)
 
 	share_obj->references++;
 
+	if (!held) release_spinlock(&AllShares.shareslock);
 	return share_obj->ID;
 }
 
@@ -219,15 +226,16 @@ int getSharedObject(int32 ownerID, char* shareName, void* virtual_address)
 void free_share(struct Share* ptrShare)
 {
 	//TODO: [PROJECT'24.MS2 - BONUS#4] [4] SHARED MEMORY [KERNEL SIDE] - free_share() [DONE]
-	if (ptrShare->references != 0) return;
 
-	acquire_spinlock(&AllShares.shareslock);
-	if (ptrShare->references == 0) {
-		LIST_REMOVE(&AllShares.shares_list, ptrShare);
-		kfree(ptrShare->framesStorage);
-		kfree(ptrShare);
-	}
-	release_spinlock(&AllShares.shareslock);
+//	uint8 held = holding_spinlock(&AllShares.shareslock);
+//	if (!held) acquire_spinlock(&AllShares.shareslock);
+
+	LIST_REMOVE(&AllShares.shares_list, ptrShare);
+
+	kfree(ptrShare->framesStorage);
+	kfree(ptrShare);
+
+//	if (!held) release_spinlock(&AllShares.shareslock);
 }
 //========================
 // [B2] Free Share Object:
@@ -266,6 +274,9 @@ void cleanup_unused_page_tables(uint32 casted_address, uint32 size, uint32 *pgdi
 int freeSharedObject(int32 sharedObjectID, void *startVA)
 {
 	//TODO: [PROJECT'24.MS2 - BONUS#4] [4] SHARED MEMORY [KERNEL SIDE] - freeSharedObject() [DONE]
+	uint8 held = holding_spinlock(&AllShares.shareslock);
+	if (!held) acquire_spinlock(&AllShares.shareslock);
+
 	struct Share* share_obj = get_share_by_id(sharedObjectID);
 	if (share_obj == NULL) {
 		cprintf("\nShare ID is not valid\n");
@@ -282,8 +293,10 @@ int freeSharedObject(int32 sharedObjectID, void *startVA)
 	cleanup_unused_page_tables(casted_address, size, myenv->env_page_directory);
 
 	share_obj->references--;
-	free_share(share_obj);
+	if (share_obj->references == 0) free_share(share_obj);
 	tlbflush();
+
+	if (!held) release_spinlock(&AllShares.shareslock);
 
 	return 0;
 }

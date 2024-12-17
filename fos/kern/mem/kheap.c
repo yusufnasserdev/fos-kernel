@@ -21,14 +21,25 @@ __inline__ uint32 get_page_idx(uint32 virtual_address) {
 }
 
 int8 allocate_map_track_page(uint32 virt_add, uint16 status) {
+
+	uint8 hld_alrdy = holding_spinlock(&khlck);
+	if (!hld_alrdy) acquire_spinlock(&khlck);
+
 	struct FrameInfo *new_frame = NULL;
 	allocate_frame(&new_frame);
 
-	if (new_frame == NULL) return NO_FRAMES;
+	if (new_frame == NULL) {
+		if (!hld_alrdy) release_spinlock(&khlck);
+		return NO_FRAMES;
+	}
+
 	map_frame(ptr_page_directory, new_frame, virt_add, PERM_WRITEABLE);
 
 	new_frame->virtual_address = virt_add;
 	kh_pgs_status[get_page_idx(virt_add)] = status;
+
+	if (!hld_alrdy) release_spinlock(&khlck);
+
 	return 0;
 }
 
@@ -48,7 +59,6 @@ int initialize_kheap_dynamic_allocator(uint32 daStart, uint32 initSizeToAllocate
 	kh_hard_cap = ROUNDUP(daLimit, PAGE_SIZE);
 	kh_pages_start = kh_hard_cap + PAGE_SIZE;
 
-
 	initSizeToAllocate = ROUNDUP(initSizeToAllocate, PAGE_SIZE); // Aligning the requested size to a page boundary
 	// Initial size exceeds the given limit
 	if (daStart + initSizeToAllocate > daLimit) {
@@ -58,6 +68,8 @@ int initialize_kheap_dynamic_allocator(uint32 daStart, uint32 initSizeToAllocate
 
 	// initialize page allocation tracking array to zeros.
 	memset(kh_pgs_status, 0, sizeof(kh_pgs_status));
+
+	init_spinlock(&khlck, "KHeap spin lock");
 
 	// Allocate the pages in the given range and map them.
 	for (uint32 iter = kh_alloc_base; iter < kh_soft_cap; iter += PAGE_SIZE) {
@@ -87,6 +99,10 @@ void* sbrk(int numOfPages)
 	if (numOfPages < 0) panic("KHeap SBRK: CANNOT ALLOCATE NEGATIVE NUM OF PAGES");
 	if (numOfPages == 0) return (void*) kh_soft_cap;
 
+	uint8 hld_alrdy = holding_spinlock(&khlck);
+	if (!hld_alrdy) acquire_spinlock(&khlck);
+
+
 	if (kh_soft_cap + (numOfPages * PAGE_SIZE) < kh_hard_cap) { // Could be <=
 		// move soft cap
 		uint32 new_start = kh_soft_cap;
@@ -97,9 +113,14 @@ void* sbrk(int numOfPages)
 			allocate_map_track_page(iter, -1);
 		}
 
+		if (!hld_alrdy) release_spinlock(&khlck);
+
 		// return start of allocated space
 		return (void*) new_start;
 	}
+
+	if (!hld_alrdy) release_spinlock(&khlck);
+
 
 	return SBRK_FAIL;
 }
@@ -120,8 +141,13 @@ void* kmalloc(unsigned int size)
 }
 
 void* kmalloc_ff(unsigned int size) {
+	uint8 hld_alrdy = holding_spinlock(&khlck);
+	if (!hld_alrdy) acquire_spinlock(&khlck);
+
 	if (size <= DYN_ALLOC_MAX_BLOCK_SIZE) {
-		return alloc_block_FF(size); // Already implemented and working
+		void* ret_addr = alloc_block_FF(size); // Already implemented and working
+		if (!hld_alrdy) release_spinlock(&khlck);
+		return ret_addr;
 	}
 
 	uint16 pages_requested_num = ROUNDUP(size, PAGE_SIZE) / PAGE_SIZE;
@@ -137,6 +163,8 @@ void* kmalloc_ff(unsigned int size) {
 		} else { // Space needs to be contagious, so any allocated pages, resets the tracking vars.
 			alloc_start_addr = NULL;
 			curr_consecutive_pgs = 0;
+			if (kh_pgs_status[iter/PAGE_SIZE] > 0)
+				iter += (kh_pgs_status[iter/PAGE_SIZE] - 1) * PAGE_SIZE;
 		}
 	}
 
@@ -147,9 +175,11 @@ void* kmalloc_ff(unsigned int size) {
 			--pages_requested_num;
 		}
 
+		if (!hld_alrdy) release_spinlock(&khlck);
 		return alloc_start_addr;
 	}
 
+	if (!hld_alrdy) release_spinlock(&khlck);
 	return NULL; // Me no can do.
 }
 
@@ -171,22 +201,30 @@ void kfree(void* virtual_address)
 	//TODO: [PROJECT'24.MS2 - #04] [1] KERNEL HEAP - kfree [DONE]
 	if (!isKHeapPlacementStrategyFIRSTFIT()) panic("ME NO CAN DO, only ff implemented for free\n");
 
+	uint8 hld_alrdy = holding_spinlock(&khlck);
+	if (!hld_alrdy) acquire_spinlock(&khlck);
+
 	uint32 casted_address = (uint32)virtual_address; // casting the address to be comparable, instead of casting multiple times.
 
 	if (casted_address >= kh_alloc_base && casted_address < kh_soft_cap) { // Block allocation range
 		free_block(virtual_address);
+		if (!hld_alrdy) release_spinlock(&khlck);
 		return;
 	}
 
 	if (casted_address >= kh_pages_start && casted_address < KERNEL_HEAP_MAX) { // Page allocation range
+
 		uint32 pages_free_cnt = kh_pgs_status[get_page_idx(casted_address)];
 		while (pages_free_cnt--) {
 			unmap_untrack_page(casted_address);
 			casted_address += PAGE_SIZE;
 		}
+
+		if (!hld_alrdy) release_spinlock(&khlck);
 		return;
 	}
 
+	if (!hld_alrdy) release_spinlock(&khlck);
 	panic("KFREE: INVALID ADDRESS\n");
 }
 

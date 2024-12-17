@@ -1,5 +1,4 @@
 #include <inc/lib.h>
-
 /*Added tracking structure*/
 uint8 uh_pgs_init = 0;
 int32 uh_pgs_status[ADDRESS_SPACE_PAGES]; // This array covers the entire address space of a 32-bit system given the illusionist role.

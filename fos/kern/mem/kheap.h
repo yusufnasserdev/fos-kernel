@@ -51,7 +51,9 @@ uint32 kh_pages_start;
 /* Added Helpers */
 void* kmalloc_ff(unsigned int size);
 void* kmalloc_bf(unsigned int size);
-void free_page(void* virtual_address);
+//void free_page(void* virtual_address);
 
+#include <kern/conc/spinlock.h>
+struct spinlock khlck;			//sleeplock to protect the KHeap allocation structure
 
 #endif // FOS_KERN_KHEAP_H_

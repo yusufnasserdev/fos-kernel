@@ -124,15 +124,17 @@ struct Share* get_share(int32 ownerID, char* name)
 	//TODO: [PROJECT'24.MS2 - #17] [4] SHARED MEMORY - get_share() [DONE]
 	struct Share* iterator_share = NULL;
 
-	acquire_spinlock(&AllShares.shareslock);
+	uint8 alrdy_held = holding_spinlock(&AllShares.shareslock);
+	if (!alrdy_held) acquire_spinlock(&AllShares.shareslock);
+
 	LIST_FOREACH(iterator_share, &AllShares.shares_list) {
 		if (iterator_share->ownerID == ownerID && strcmp(iterator_share->name, name) == 0) {
-			release_spinlock(&AllShares.shareslock);
+			if (!alrdy_held) release_spinlock(&AllShares.shareslock);
 			return iterator_share;
 		}
 	}
 
-	release_spinlock(&AllShares.shareslock);
+	if (!alrdy_held) release_spinlock(&AllShares.shareslock);
 	return NULL;
 }
 
@@ -140,15 +142,17 @@ struct Share* get_share_by_id(int32 ID)
 {
 	struct Share* iterator_share = NULL;
 
-	acquire_spinlock(&AllShares.shareslock);
+	uint8 alrdy_held = holding_spinlock(&AllShares.shareslock);
+	if (!alrdy_held) acquire_spinlock(&AllShares.shareslock);
+
 	LIST_FOREACH(iterator_share, &AllShares.shares_list) {
 		if (iterator_share->ID == ID) {
-			release_spinlock(&AllShares.shareslock);
+			if (!alrdy_held) release_spinlock(&AllShares.shareslock);
 			return iterator_share;
 		}
 	}
 
-	release_spinlock(&AllShares.shareslock);
+	if (!alrdy_held) release_spinlock(&AllShares.shareslock);
 	return NULL;
 }
 
@@ -164,8 +168,8 @@ int createSharedObject(int32 ownerID, char* shareName, uint32 size, uint8 isWrit
 	struct Share* new_share = create_share(ownerID, shareName, size, isWritable);
 	if (new_share == NULL) return E_NO_SHARE;
 
-	uint8 held = holding_spinlock(&AllShares.shareslock);
-	if (!held) acquire_spinlock(&AllShares.shareslock);
+	uint8 alrdy_held = holding_spinlock(&AllShares.shareslock);
+	if (!alrdy_held) acquire_spinlock(&AllShares.shareslock);
 
 	struct Env* myenv = get_cpu_proc();
 	uint32 casted_address = (uint32) virtual_address;
@@ -178,7 +182,7 @@ int createSharedObject(int32 ownerID, char* shareName, uint32 size, uint8 isWrit
 	}
 
 	LIST_INSERT_TAIL(&AllShares.shares_list, new_share);
-	if (!held) release_spinlock(&AllShares.shareslock);
+	if (!alrdy_held) release_spinlock(&AllShares.shareslock);
 
 	return new_share->ID;
 }
@@ -194,8 +198,8 @@ int getSharedObject(int32 ownerID, char* shareName, void* virtual_address)
 	struct Share* share_obj = get_share(ownerID, shareName);
 	if (share_obj == NULL) return E_SHARED_MEM_NOT_EXISTS;
 
-	uint8 held = holding_spinlock(&AllShares.shareslock);
-	if (!held) acquire_spinlock(&AllShares.shareslock);
+	uint8 alrdy_held = holding_spinlock(&AllShares.shareslock);
+	if (!alrdy_held) acquire_spinlock(&AllShares.shareslock);
 
 	// Setting up the permissions as per the shared objects predefined isWritable.
 	int perms = PERM_USER;
@@ -210,7 +214,7 @@ int getSharedObject(int32 ownerID, char* shareName, void* virtual_address)
 
 	share_obj->references++;
 
-	if (!held) release_spinlock(&AllShares.shareslock);
+	if (!alrdy_held) release_spinlock(&AllShares.shareslock);
 	return share_obj->ID;
 }
 
@@ -227,15 +231,15 @@ void free_share(struct Share* ptrShare)
 {
 	//TODO: [PROJECT'24.MS2 - BONUS#4] [4] SHARED MEMORY [KERNEL SIDE] - free_share() [DONE]
 
-//	uint8 held = holding_spinlock(&AllShares.shareslock);
-//	if (!held) acquire_spinlock(&AllShares.shareslock);
+//	uint8 alrdy_held = holding_spinlock(&AllShares.shareslock);
+//	if (!alrdy_held) acquire_spinlock(&AllShares.shareslock);
 
 	LIST_REMOVE(&AllShares.shares_list, ptrShare);
 
 	kfree(ptrShare->framesStorage);
 	kfree(ptrShare);
 
-//	if (!held) release_spinlock(&AllShares.shareslock);
+//	if (!alrdy_held) release_spinlock(&AllShares.shareslock);
 }
 //========================
 // [B2] Free Share Object:
@@ -274,8 +278,8 @@ void cleanup_unused_page_tables(uint32 casted_address, uint32 size, uint32 *pgdi
 int freeSharedObject(int32 sharedObjectID, void *startVA)
 {
 	//TODO: [PROJECT'24.MS2 - BONUS#4] [4] SHARED MEMORY [KERNEL SIDE] - freeSharedObject() [DONE]
-	uint8 held = holding_spinlock(&AllShares.shareslock);
-	if (!held) acquire_spinlock(&AllShares.shareslock);
+	uint8 alrdy_held = holding_spinlock(&AllShares.shareslock);
+	if (!alrdy_held) acquire_spinlock(&AllShares.shareslock);
 
 	struct Share* share_obj = get_share_by_id(sharedObjectID);
 	if (share_obj == NULL) {
@@ -296,7 +300,7 @@ int freeSharedObject(int32 sharedObjectID, void *startVA)
 	if (share_obj->references == 0) free_share(share_obj);
 	tlbflush();
 
-	if (!held) release_spinlock(&AllShares.shareslock);
+	if (!alrdy_held) release_spinlock(&AllShares.shareslock);
 
 	return 0;
 }

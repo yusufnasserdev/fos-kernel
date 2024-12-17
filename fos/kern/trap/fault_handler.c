@@ -272,12 +272,12 @@ void page_fault_handler(struct Env * faulted_env, uint32 fault_va)
 	}
 	else
 	{
-		//TODO: [PROJECT'24.MS3 - #01] [1] FAULT HANDLER II - Replacement
+		//TODO: [PROJECT'24.MS3 - #01] [1] FAULT HANDLER II - Replacement [DONE]
 		//		cprintf("REPLACEMENT=========================WS Size = %d\n", wsSize );
 
         //DEBUGGING
-//		cprintf("\nBEFORE\n");
-//      env_page_ws_print(faulted_env);
+		//cprintf("\nBEFORE\n");
+		//env_page_ws_print(faulted_env);
 
 		// Replacement (Nth Chance Clock)
         struct WorkingSetElement *current_ws_element = faulted_env->page_last_WS_element;
@@ -348,8 +348,8 @@ void page_fault_handler(struct Env * faulted_env, uint32 fault_va)
 						faulted_env->page_last_WS_element = LIST_FIRST(&faulted_env->page_WS_list);
 
                     //DEBUGGING
-//            		cprintf("\nAFTER\n");
-//                  env_page_ws_print(faulted_env);
+					//cprintf("\nAFTER\n");
+					//env_page_ws_print(faulted_env);
 
                     break; /*if (current_ws_element->sweeps_counter > curr_max_sweeps)*/
                 }

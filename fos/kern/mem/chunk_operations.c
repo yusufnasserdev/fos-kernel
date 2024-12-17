@@ -130,7 +130,7 @@ void* sys_sbrk(int numOfPages)
 	 * NOTES:
 	 * 	1) As in real OS, allocate pages lazily. While sbrk moves the segment break, pages are not allocated
 	 * 		until the user program actually tries to access data in its heap (i.e. will be allocated via the fault handler).
-	 * 	2) Allocating additional pages for a process’ heap will fail if, for example, the free frames are exhausted
+	 * 	2) Allocating additional pages for a processâ€™ heap will fail if, for example, the free frames are exhausted
 	 * 		or the break exceed the limit of the dynamic allocator. If sys_sbrk fails, the net effect should
 	 * 		be that sys_sbrk returns (void*) -1 and that the segment break and the process heap are unaffected.
 	 * 		You might have to undo any operations you have done so far in this case.
@@ -185,6 +185,8 @@ void allocate_user_mem(struct Env* e, uint32 virtual_address, uint32 size)
 void free_user_mem(struct Env* e, uint32 virtual_address, uint32 size)
 {
 	//TODO: [PROJECT'24.MS2 - #15] [3] USER HEAP [KERNEL SIDE] - free_user_mem [DONE]
+	//TODO: [PROJECT'24.MS3 - #00] [1] FAULT HANDLER II - free_user_mem [DONE]
+
 	for (uint32 iter = virtual_address, limit = virtual_address + size; iter < limit; iter += PAGE_SIZE) {
 		uint32* pg_table = NULL;
 		get_page_table(e->env_page_directory, iter, &pg_table);
@@ -192,7 +194,7 @@ void free_user_mem(struct Env* e, uint32 virtual_address, uint32 size)
 		if (pg_table == NULL) return;
 
 		unmark_page(pg_table, iter);
-		env_page_ws_invalidate(e, iter);
+		env_page_ws_invalidate(e, iter); 	// Maintains page_last_WS_element
 		pf_remove_env_page(e, iter);
 	}
 	//TODO: [PROJECT'24.MS2 - BONUS#3] [3] USER HEAP [KERNEL SIDE] - O(1) free_user_mem

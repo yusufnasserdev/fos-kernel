@@ -283,6 +283,23 @@ void page_fault_handler(struct Env * faulted_env, uint32 fault_va)
         struct WorkingSetElement *current_ws_element = faulted_env->page_last_WS_element;
         if (current_ws_element == NULL) current_ws_element = LIST_FIRST(&faulted_env->page_WS_list);
 
+        /*
+         * Bad designs forces bad code
+         *
+         * Here's an example of the hypocrisy of the professor teaching this course.
+         *
+         * If you really want to have students learn while building the kernel, why
+         * not just have a simple flag if you want the modified bit to be given an
+         * extra chance?
+         *
+         * Now I have to use the variable holding the max sweeps itself as a flag?
+         * So create one local variable holding the REAL max sweeps then create another
+         * to hold the REAL REAL ON GOD max sweeps per page (if modified)?
+         *
+         * Is it really about learning or just about jumping through hoops like animals in a circus?
+         *
+         */
+
 		int32 max_sweeps = page_WS_max_sweeps;
 		if (page_WS_max_sweeps < 0) max_sweeps = page_WS_max_sweeps * -1;
 
@@ -348,6 +365,7 @@ void page_fault_handler(struct Env * faulted_env, uint32 fault_va)
         }
 	}
 }
+
 
 void __page_fault_handler_with_buffering(struct Env * curenv, uint32 fault_va)
 {

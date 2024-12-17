@@ -243,12 +243,13 @@ void page_fault_handler(struct Env * faulted_env, uint32 fault_va)
 	uint32 wsSize = env_page_ws_get_size(faulted_env);
 #endif
 
+	// Have you jumped through enough hoops today?
+    fault_va = ROUNDDOWN(fault_va, PAGE_SIZE);
+
 	if(wsSize < (faulted_env->page_WS_max_size))
 	{
 		//cprintf("PLACEMENT=========================WS Size = %d\n", wsSize );
 		//TODO: [PROJECT'24.MS2 - #09] [2] FAULT HANDLER I - Placement [DONE]
-
-		if (faulted_env == NULL) panic("page_fault_handler: Invalid environment pointer\n");
 
 		struct FrameInfo* faulted_pg_frame = NULL;
 		allocate_frame(&faulted_pg_frame);
@@ -268,15 +269,83 @@ void page_fault_handler(struct Env * faulted_env, uint32 fault_va)
 			faulted_env->page_last_WS_element = LIST_FIRST(&faulted_env->page_WS_list);
 		else faulted_env->page_last_WS_element = NULL;
 
-		//refer to the project presentation and documentation for details
 	}
 	else
 	{
-		//cprintf("REPLACEMENT=========================WS Size = %d\n", wsSize );
-		//refer to the project presentation and documentation for details
-		//TODO: [PROJECT'24.MS3] [2] FAULT HANDLER II - Replacement
-		// Write your code here, remove the panic and write your code
-		panic("page_fault_handler() Replacement is not implemented yet...!!");
+		//TODO: [PROJECT'24.MS3 - #01] [1] FAULT HANDLER II - Replacement
+		//		cprintf("REPLACEMENT=========================WS Size = %d\n", wsSize );
+
+        //DEBUGGING
+//		cprintf("\nBEFORE\n");
+//      env_page_ws_print(faulted_env);
+
+		// Replacement (Nth Chance Clock)
+        struct WorkingSetElement *current_ws_element = faulted_env->page_last_WS_element;
+        if (current_ws_element == NULL) current_ws_element = LIST_FIRST(&faulted_env->page_WS_list);
+
+		int32 max_sweeps = page_WS_max_sweeps;
+		if (page_WS_max_sweeps < 0) max_sweeps = page_WS_max_sweeps * -1;
+
+        while (1) // Loop till an element meets the criteria, fairness!
+        {
+            uint32 va = current_ws_element->virtual_address;
+            uint32 perm = pt_get_page_permissions(faulted_env->env_page_directory, va);
+
+            if (!(perm & PERM_USED))
+            {
+                current_ws_element->sweeps_counter++;
+                uint32 curr_max_sweeps = max_sweeps;
+                if ((perm & PERM_MODIFIED) && (page_WS_max_sweeps < 0)) curr_max_sweeps++;
+
+                if (current_ws_element->sweeps_counter > curr_max_sweeps)
+                {
+
+					if (perm & PERM_MODIFIED) {
+						uint32 *faulted_pg_tbl = NULL;
+						get_page_table(faulted_env->env_page_directory, va, &faulted_pg_tbl);
+						struct FrameInfo *replaced_frame = get_frame_info(faulted_env->env_page_directory, va, &faulted_pg_tbl);
+						pf_update_env_page(faulted_env, va, replaced_frame);
+					}
+
+                    // Replace this page
+                    unmap_frame(faulted_env->env_page_directory, va);
+
+                    struct FrameInfo* faulted_pg_frame = NULL;
+                    allocate_frame(&faulted_pg_frame);
+                    map_frame(faulted_env->env_page_directory, faulted_pg_frame, fault_va, NO_PERM_MARKED | PERM_WRITEABLE | PERM_USER);
+
+                    if (pf_read_env_page(faulted_env, (void *) fault_va) != 0) {
+                        if (!(fault_va >= USER_HEAP_START && fault_va < USER_HEAP_MAX)
+                                && !(fault_va >= USTACKBOTTOM && fault_va < USTACKTOP)) {
+                            env_exit();
+                        }
+                    }
+
+                    pt_set_page_permissions(faulted_env->env_page_directory, fault_va, NO_PERM_MARKED | PERM_WRITEABLE | PERM_USER, 0);
+                    faulted_env->page_last_WS_element = current_ws_element;
+
+					current_ws_element->virtual_address = fault_va;
+					current_ws_element->sweeps_counter = 0;
+					faulted_env->page_last_WS_element = LIST_NEXT(current_ws_element);
+					if (faulted_env->page_last_WS_element == NULL)
+						faulted_env->page_last_WS_element = LIST_FIRST(&faulted_env->page_WS_list);
+
+                    //DEBUGGING
+//            		cprintf("\nAFTER\n");
+//                  env_page_ws_print(faulted_env);
+
+                    break; /*if (current_ws_element->sweeps_counter > curr_max_sweeps)*/
+                }
+            }
+            else
+            {
+                pt_set_page_permissions(faulted_env->env_page_directory, va, NO_PERM_MARKED | PERM_WRITEABLE | PERM_USER, PERM_USED);
+                current_ws_element->sweeps_counter = 0;
+            }
+
+            current_ws_element = LIST_NEXT(current_ws_element);
+            if (current_ws_element == NULL) current_ws_element = LIST_FIRST(&faulted_env->page_WS_list);
+        }
 	}
 }
 

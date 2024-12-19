@@ -243,8 +243,7 @@ void page_fault_handler(struct Env * faulted_env, uint32 fault_va)
 	uint32 wsSize = env_page_ws_get_size(faulted_env);
 #endif
 
-	// Have you jumped through enough hoops today?
-    fault_va = ROUNDDOWN(fault_va, PAGE_SIZE);
+    fault_va = ROUNDDOWN(fault_va, PAGE_SIZE); // Rounding down to a page boundary
 
 	if(wsSize < (faulted_env->page_WS_max_size))
 	{
@@ -273,48 +272,24 @@ void page_fault_handler(struct Env * faulted_env, uint32 fault_va)
 	else
 	{
 		//TODO: [PROJECT'24.MS3 - #01] [1] FAULT HANDLER II - Replacement [DONE]
-		//		cprintf("REPLACEMENT=========================WS Size = %d\n", wsSize );
-
-        //DEBUGGING
-		//cprintf("\nBEFORE\n");
-		//env_page_ws_print(faulted_env);
-
-		// Replacement (Nth Chance Clock)
-        struct WorkingSetElement *current_ws_element = faulted_env->page_last_WS_element;
-        if (current_ws_element == NULL) current_ws_element = LIST_FIRST(&faulted_env->page_WS_list);
-
-        /*
-         * Bad designs forces bad code
-         *
-         * Here's an example of the hypocrisy of the professor teaching this course.
-         *
-         * If you really want to have students learn while building the kernel, why
-         * not just have a simple flag if you want the modified bit to be given an
-         * extra chance?
-         *
-         * Now I have to use the variable holding the max sweeps itself as a flag?
-         * So create one local variable holding the REAL max sweeps then create another
-         * to hold the REAL REAL ON GOD max sweeps per page (if modified)?
-         *
-         * Is it really about learning or just about jumping through hoops like animals in a circus?
-         *
-         */
+        struct WorkingSetElement *current_ws_element = faulted_env->page_last_WS_element; // iterator
+        if (current_ws_element == NULL) current_ws_element = LIST_FIRST(&faulted_env->page_WS_list); // wraps around
 
 		int32 max_sweeps = page_WS_max_sweeps;
 		if (page_WS_max_sweeps < 0) max_sweeps = page_WS_max_sweeps * -1;
 
-        while (1) // Loop till an element meets the criteria, fairness!
+        while (1) // Loop till an element meets the criteria.
         {
             uint32 va = current_ws_element->virtual_address;
             uint32 perm = pt_get_page_permissions(faulted_env->env_page_directory, va);
 
             if (!(perm & PERM_USED))
             {
-                current_ws_element->sweeps_counter++;
-                uint32 curr_max_sweeps = max_sweeps;
+            	current_ws_element->sweeps_counter++;
+                int32 curr_max_sweeps = max_sweeps;
                 if ((perm & PERM_MODIFIED) && (page_WS_max_sweeps < 0)) curr_max_sweeps++;
 
-                if (current_ws_element->sweeps_counter > curr_max_sweeps)
+                if (current_ws_element->sweeps_counter >= curr_max_sweeps)
                 {
 
 					if (perm & PERM_MODIFIED) {
@@ -324,32 +299,28 @@ void page_fault_handler(struct Env * faulted_env, uint32 fault_va)
 						pf_update_env_page(faulted_env, va, replaced_frame);
 					}
 
-                    // Replace this page
+                    // Unmap victim page frame
                     unmap_frame(faulted_env->env_page_directory, va);
+					tlb_invalidate(faulted_env->env_page_directory, (void*)va);
 
+                    // Prepare new element
                     struct FrameInfo* faulted_pg_frame = NULL;
                     allocate_frame(&faulted_pg_frame);
-                    map_frame(faulted_env->env_page_directory, faulted_pg_frame, fault_va, NO_PERM_MARKED | PERM_WRITEABLE | PERM_USER);
+                    map_frame(faulted_env->env_page_directory, faulted_pg_frame, fault_va, NO_PERM_MARKED | PERM_WRITEABLE | PERM_USER | PERM_USED);
 
-                    if (pf_read_env_page(faulted_env, (void *) fault_va) != 0) {
+                    if (pf_read_env_page(faulted_env, (void *) fault_va) != 0) { // Check validity
                         if (!(fault_va >= USER_HEAP_START && fault_va < USER_HEAP_MAX)
                                 && !(fault_va >= USTACKBOTTOM && fault_va < USTACKTOP)) {
                             env_exit();
                         }
                     }
 
-                    pt_set_page_permissions(faulted_env->env_page_directory, fault_va, NO_PERM_MARKED | PERM_WRITEABLE | PERM_USER, 0);
-                    faulted_env->page_last_WS_element = current_ws_element;
-
-					current_ws_element->virtual_address = fault_va;
+					current_ws_element->virtual_address = fault_va; // Replace with the fault values
 					current_ws_element->sweeps_counter = 0;
-					faulted_env->page_last_WS_element = LIST_NEXT(current_ws_element);
+
+					faulted_env->page_last_WS_element = LIST_NEXT(current_ws_element); // Maintain correct order
 					if (faulted_env->page_last_WS_element == NULL)
 						faulted_env->page_last_WS_element = LIST_FIRST(&faulted_env->page_WS_list);
-
-                    //DEBUGGING
-					//cprintf("\nAFTER\n");
-					//env_page_ws_print(faulted_env);
 
                     break; /*if (current_ws_element->sweeps_counter > curr_max_sweeps)*/
                 }

@@ -192,8 +192,13 @@ void* kmalloc_bf(unsigned int size) {
 }
 
 void unmap_untrack_page(uint32 virt_add) {
+	uint8 hld_alrdy = holding_spinlock(&khlck);
+	if (!hld_alrdy) acquire_spinlock(&khlck);
+
 	kh_pgs_status[get_page_idx(virt_add)] = 0;
 	unmap_frame(ptr_page_directory, virt_add);
+
+	if (!hld_alrdy) release_spinlock(&khlck);
 }
 
 void kfree(void* virtual_address)
@@ -266,6 +271,6 @@ void *krealloc(void *virtual_address, uint32 new_size)
 {
 	//TODO: [PROJECT'24.MS2 - BONUS#1] [1] KERNEL HEAP - krealloc
 	// Write your code here, remove the panic and write your code
-	return NULL;
 	panic("krealloc() is not implemented yet...!!");
+	return NULL;
 }

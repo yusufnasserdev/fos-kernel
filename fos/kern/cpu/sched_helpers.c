@@ -308,7 +308,6 @@ void sched_run_env(uint32 envId)
 //=================================================
 void sched_exit_env(uint32 envId)
 {
-	cprintf("\n[SCHED_EXIT_ENV] %d\n", envId);
 	bool lock_already_held = holding_spinlock(&ProcessQueues.qlock);
 	  //cprintf("\n[SCHED_EXIT_ENV] acquire: lock status before acquire = %d\n", qlock.locked);
 	if (!lock_already_held)

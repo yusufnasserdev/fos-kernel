@@ -39,6 +39,7 @@ void sleep(struct Channel *chan, struct spinlock* lk)
 	// Marking process as blocked & Adding the current process to queue
 	curr_env->env_status = ENV_BLOCKED;
 	enqueue(&(chan->queue), curr_env);
+	//TODO: Check if the lock (qlock) release should be done here instead of the end 
 
 	// Releasing the guard lock for the original sleep lock to allow for other processes to sleep and join the wait.
 	release_spinlock(lk);
@@ -46,7 +47,7 @@ void sleep(struct Channel *chan, struct spinlock* lk)
 	// Call the scheduler to resume with other processes
 	sched();
 
-	// Once woke up, re-acquire lock
+	// Once woke up, re-acquire the guard lock, so it can be released in the calling function.
 	acquire_spinlock(lk);
 
 	// Releasing the queue for other processes.
